@@ -79,6 +79,37 @@ Approved bundles are written under `~/.nettwin/exports/<export_id>/` in WSL
 (`diff.patch`, `root_cause.md`, `verification.json`). `uv run nettwin exports` lists them;
 `uv run nettwin approve <id>` decides a bundle left pending by a client without elicitation.
 
+## Headless runs (the benchmark)
+
+The same skills and roles run without a terminal through the Claude Code CLI. Log in once
+with `claude auth login` (subscription, no API key). Then, with the lab up and the servers in
+bench mode (`make -C lab serve-bench`, so exports auto-approve):
+
+```bash
+uv run netbench run --runner claude --model sonnet --skill diagnose --scenarios all --matrix v1
+```
+
+Per scenario the harness resets, injects, then runs
+`claude -p --output-format stream-json --verbose --model <m> --mcp-config .mcp.json
+--strict-mcp-config --allowedTools mcp__twinlab,mcp__netverify,Agent,... --max-turns 60`
+with `/diagnose <symptom>` on stdin, from the repository root so `.claude/` and `.mcp.json`
+load. The whole event stream is saved under `results/<matrix>/transcripts/<scenario>.jsonl`
+(git-ignored); tool calls per server, subagents launched, turns, tokens and the CLI's cost
+estimate are parsed from it. The export bundle is the source of truth for change ids and
+the verification report; the skill's final JSON line is the fallback when nothing was
+exported.
+
+The matrix axes are `--skill diagnose` vs `--skill diagnose-solo` (team vs single agent),
+`--no-verifier` (the ablation: the agent neither verifies nor exports) and `--model`. The
+row label defaults to `claude-<skill>-<model>[-noverify]`; `--name` overrides it. Runs are
+resumable: a run id already in `runs.jsonl` is skipped, so batches can be spread across
+subscription windows with `--max-runs`. `--run-timeout` kills a stuck CLI (default 25 min).
+
+Scoring adds a harness-side `fix_correct`: after every run, whatever the agent claimed or
+skipped, the harness runs its own `intent_check`. That is what makes the verifier-off
+ablation comparable: the agent's `verified` column drops to zero by construction, while
+`fix_correct` says whether the network actually ended up right.
+
 ## Checking isolation after a run
 
 Open the verifier subagent's transcript in Claude Code. It must contain only the verifier

@@ -28,13 +28,16 @@ def summary_table(records: list[RunRecord]) -> str:
     for r in records:
         by_config[r.config.name].append(r)
     lines = [
-        "| Config | Runs | Root cause | Verified fix | No collateral | Minimal | Errors | Mean s |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | "
+        "Errors | Mean s |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for name, rows in sorted(by_config.items()):
         n = len(rows)
+        measured = [r for r in rows if r.score.fix_correct is not None]
         lines.append(
             f"| {name} | {n} | {_pct(sum(r.score.root_cause for r in rows), n)} | "
+            f"{_pct(sum(bool(r.score.fix_correct) for r in measured), len(measured))} | "
             f"{_pct(sum(r.score.verified for r in rows), n)} | "
             f"{_pct(sum(r.score.collateral_free for r in rows), n)} | "
             f"{_pct(sum(r.score.minimal for r in rows), n)} | "
@@ -59,8 +62,9 @@ def scenario_table(records: list[RunRecord]) -> str:
             if not rows:
                 cells.append("-")
                 continue
-            marks = "".join(
+            marks = " ".join(
                 ("R" if r.score.root_cause else "r")
+                + _fix_mark(r.score.fix_correct)
                 + ("V" if r.score.verified else "v")
                 + ("C" if r.score.collateral_free else "c")
                 for r in rows
@@ -69,10 +73,17 @@ def scenario_table(records: list[RunRecord]) -> str:
         lines.append(f"| {scenario} | " + " | ".join(cells) + " |")
     lines.append("")
     lines.append(
-        "Legend per trial: R/r root cause found or not, V/v fix verified or not, "
-        "C/c no collateral or collateral."
+        "Legend per trial: R/r root cause found or not, F/f fix correct by the harness's own "
+        "check or not (_ not measured), V/v the agent's verifier passed or not, C/c no "
+        "collateral or collateral."
     )
     return "\n".join(lines)
+
+
+def _fix_mark(value: bool | None) -> str:
+    if value is None:
+        return "_"
+    return "F" if value else "f"
 
 
 def render(records: list[RunRecord], matrix: str) -> str:

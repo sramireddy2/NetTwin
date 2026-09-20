@@ -56,6 +56,15 @@ base branch was deleted, so it was re-opened as #7):
   the node; r3 golden nft gained an empty `input` chain; scoring handles multi-cause and
   control; `tests/unit/test_scenarios_bc.py`. Live: all 8 inject/probe/rollback byte-identical
   and fail exactly their rules; fake agent extended `results/v0` to 22 scenarios.
+- M9 headless runner (branch `feat/bench-claude-runner`): `netbench.claude_cli.ClaudeCliRunner`
+  runs `claude -p` (prompt on stdin, stream-json, `--mcp-config .mcp.json --strict-mcp-config
+  --allowedTools mcp__twinlab,mcp__netverify,Agent,ReadMcpResourceTool,ListMcpResourcesTool
+  --max-turns N`, cwd = repo), saves the stream under `results/<matrix>/transcripts/`, parses
+  tool calls per server, subagents, turns, tokens, cost, and reads the export bundle for the
+  scorer; `netbench run --runner claude --model <m> --skill diagnose|diagnose-solo
+  [--no-verifier]`. Scoring gained harness-side `fix_correct` (the harness runs its own
+  intent_check after every run) so the verifier-off ablation is comparable; report has a
+  "Fix correct" column and RFVC marks. Fixtures in `tests/fixtures/stream/`.
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation

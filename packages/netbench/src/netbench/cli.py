@@ -9,6 +9,7 @@ from pathlib import Path
 import typer
 
 from netbench.admin import HttpAdmin, read_admin_token
+from netbench.claude_cli import ClaudeCliRunner
 from netbench.clients import ToolClient, http_session
 from netbench.harness import Harness, RunConfig
 from netbench.report import load_records, render
@@ -34,7 +35,16 @@ def run(
     runner: str = typer.Option(
         "fake",
         help="fake replays each scenario's expected fix; manual waits for an interactive "
-        "Claude Code /diagnose run and scores its export bundle",
+        "Claude Code /diagnose run and scores its export bundle; claude runs the skill "
+        "headlessly with `claude -p`",
+    ),
+    model: str = typer.Option("sonnet", help="claude runner: Claude Code model alias or id"),
+    skill: str = typer.Option(
+        "diagnose", help="claude runner: diagnose (team) or diagnose-solo (single agent)"
+    ),
+    max_turns: int = typer.Option(60, help="claude runner: --max-turns for the commander"),
+    run_timeout: float = typer.Option(
+        1500.0, help="claude runner: kill the CLI after this many seconds"
     ),
     matrix: str = typer.Option("v0", help="Results are appended to results/<matrix>/runs.jsonl"),
     scenarios: str = typer.Option("all", help="'all' or comma-separated ids or prefixes"),
@@ -60,20 +70,35 @@ def run(
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     chosen = _select(scenarios, scenarios_dir)
-    if runner not in ("fake", "manual"):
-        raise typer.BadParameter("runner must be fake or manual")
+    if runner not in ("fake", "manual", "claude"):
+        raise typer.BadParameter("runner must be fake, manual or claude")
+    if skill not in ("diagnose", "diagnose-solo"):
+        raise typer.BadParameter("skill must be diagnose or diagnose-solo")
+    label = f"claude-{skill}-{model}" if runner == "claude" else runner
     config = RunConfig(
-        name=name or f"{runner}{'-noverify' if no_verifier else ''}",
+        name=name or f"{label}{'-noverify' if no_verifier else ''}",
         runner=runner,
+        model=model if runner == "claude" else None,
         verifier=not no_verifier,
+        multi_agent=(skill == "diagnose") if runner == "claude" else None,
     )
     token = read_admin_token(token_file)
     admin_client = HttpAdmin(admin, token)
-    agent: Runner = (
-        FakeAgentRunner(chosen)
-        if runner == "fake"
-        else ManualRunner(admin_client, timeout=timeout, notify=typer.echo)
-    )
+    agent: Runner
+    if runner == "fake":
+        agent = FakeAgentRunner(chosen)
+    elif runner == "manual":
+        agent = ManualRunner(admin_client, timeout=timeout, notify=typer.echo)
+    else:
+        agent = ClaudeCliRunner(
+            admin_client,
+            model=model,
+            skill=skill,
+            max_turns=max_turns,
+            timeout=run_timeout,
+            cwd=Path.cwd(),
+            transcripts_dir=results / matrix / "transcripts",
+        )
 
     async def main() -> int:
         async with http_session(twinlab) as twin_s, http_session(netverify) as verify_s:

@@ -95,9 +95,9 @@ async def test_fake_agent_scores_perfectly_on_a_scripted_twin(tmp_path: Path) ->
     loaded = load_records(harness.results_path)
     assert [r.run_id for r in loaded] == [f"{scenario.id}/fake/1", f"{scenario.id}/crash/1"]
     text = render(loaded, "unit")
-    assert "| fake | 1 | 100% | 100% | 100% | 100% | 0 |" in text
-    assert "| crash | 1 | 0% | 0% |" in text
-    assert f"| {scenario.id} | rvC | RVC |" in text  # columns are sorted by config name
+    assert "| fake | 1 | 100% | 100% | 100% | 100% | 100% | 0 |" in text
+    assert "| crash | 1 | 0% | 100% | 0% |" in text  # the scripted twin always checks out
+    assert f"| {scenario.id} | rFvC | RFVC |" in text  # columns are sorted by config name
 
 
 def _report(passed: bool) -> VerificationReport:

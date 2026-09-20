@@ -295,3 +295,29 @@ scenarios (8 min 22 s, servers in bench mode, the earlier 14 runs kept):
 The new runs took 17 to 28 s each; the control run applied nothing, exported nothing, and
 scored root cause and minimal for exactly that. The first 14 records were taken before r3's
 golden ruleset gained its empty input chain, which changes no behaviour.
+
+## Headless Claude Code runner (M9)
+
+`netbench run --runner claude` launches `claude -p` from the repository root with the
+symptom on stdin and parses the stream-json events; `docs/diagnose.md` has the flags. The
+harness also gained its own judgement: after every run it calls `intent_check` itself and
+records `fix_correct`, so the verifier-off ablation still measures whether the network ended
+up right. Records from before that column show `_` (per scenario) and `-` (summary) rather
+than a fabricated value.
+
+First headless run (2026-09-20, Max subscription, `--model sonnet`, `--skill diagnose`,
+servers in bench mode), recorded as the first row of `results/v1/runs.jsonl`:
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s |
+|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet | 1 | 100% | 100% | 100% | 100% | 100% | 0 | 299 |
+
+From the transcript (275 events): the CLI loaded both project skills, all five roles and both
+MCP servers without `--bare`; the commander read the topology, took S0, launched the three
+investigators (L2 12, L3 7, policy 13 `run_show_command` calls, nothing else), the change
+agent (3 show commands, one snapshot, one `apply_config` on r3), and the verifier (two
+`wait_converged`, one `intent_check`, one `route_diff`, no twinlab tool at all); the verifier's
+prompt contained exactly S0, S1, the policy path and the symptom. 53 tool calls, 5 subagents,
+about 375 k cache-read, 59 k cache-write and 4 k output tokens, which the CLI prices at
+$0.97 had it been paid per token; the export was auto-approved in bench mode. The main thread
+also made four `ToolSearch` calls, the headless CLI's way of loading deferred tool schemas.
