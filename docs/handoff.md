@@ -1,6 +1,6 @@
 ---
 name: nettwin-handoff
-description: Handoff for the NetTwin build as of 2026-09-20 — what is merged, what is mid-flight on feat/bench-harness, environment facts, decisions, how to run, and the next milestones
+description: Handoff for the NetTwin build as of 2026-09-20 — what is merged (M0-M6), what is in PR (M7), environment facts, decisions, how to run, and the next milestones
 metadata:
   type: project
 ---
@@ -35,12 +35,20 @@ branch was deleted, so it was re-opened as #7):
   HMAC and that it covers the state after the last change and the policy in force, then asks the
   operator via MCP elicitation; `NETTWIN_BENCH=1` auto-approves; no-elicitation clients leave it
   pending for `nettwin approve <id>` (`/admin/approve/{id}`). Prompts `diagnose`, `propose-change`.
-
 - M6 netbench: `ToolClient` over in-memory or streamable-HTTP MCP sessions, `HttpAdmin` /
   `CallableAdmin` for the side door, `Harness` (baseline, reset, inject, run, score, one JSONL
   record per run, resumable by run id), `FakeAgentRunner` replaying `expected_fix`, structured
   scoring (root cause node+component, verified, collateral vs golden matrix, minimal), markdown
   report, `netbench run|report` CLI, twinlab `get_change` tool, `make serve-bench`.
+- M7 claude agents (branch `feat/claude-agents`, PR #9 open): `.claude/agents/` role files
+  (l2/l3/policy investigators with `run_show_command` only, change-agent without export,
+  verifier scoped to netverify), `.claude/skills/diagnose` and `diagnose-solo`,
+  `netbench.roles` (frontmatter parser, reused by M10), `ManualRunner` + `netbench run
+  --runner manual` to score an interactive run through the new `/admin/exports/{id}` route,
+  `docs/diagnose.md` runbook. Manual runner proven live with a scripted stand-in (001, RVC),
+  then the real team closed scenario 001 interactively: RVC, minimal, 4 min 4 s from S0 to
+  export, verifier isolated; Claude Code desktop did not surface the elicitation, so the
+  export went through the pending + `nettwin approve` path (`results/interactive/runs.jsonl`).
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -94,6 +102,9 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - Long lab tests: `pytest -q` prints nothing until the end. Launch them detached
   (`nohup uv run pytest ... > ~/.nettwin/logs/x.log &`) and watch the log; a Bash tool call
   cannot block that long.
+- This desktop session (opened in the OneDrive folder, moved with change_directory) never
+  loaded the project `.mcp.json` servers, so `/diagnose` could not be exercised from it.
+  Sessions opened in the repo do load them.
 
 ## Decisions the user confirmed
 
@@ -112,12 +123,11 @@ golden scripts flush route caches; snapshot ids exclude routes (derived) and bri
 
 ## Next milestones
 
-- M7 `feat/claude-agents`: `.claude/agents/{l2,l3,policy}-investigator.md` (twinlab read tools
-  only), `change-agent.md` (twinlab read + apply/snapshot/rollback, no export), `verifier.md`
-  (`mcpServers: [netverify]` only), all `model: inherit`, none with Bash/Read/Write;
-  `.claude/skills/diagnose/SKILL.md` (main thread: snapshot S0, parallel investigators, change
-  agent, verifier with only S0/S1/policy/symptom, export_change or rollback+retry ≤2,
-  `--no-verifier` arg) and `diagnose-solo`. `.mcp.json` and `.claude/settings.json` already exist.
+- M7 done once PR #9 is merged. Lessons: a Claude Code session must be opened in the repo for
+  `.mcp.json` to load, and if the servers are down at session start the user reconnects them
+  with `/mcp` (the reconnect tool only handles claude.ai connectors); the desktop app did not
+  present MCP elicitation, so approvals go through `nettwin approve <id>`; the harness's
+  manual runner waits 3 min for that decision and scores a pending bundle as exported.
 - M8 tier B/C scenarios 015–020 (VLAN access/trunk/subinterface tag; nft ACL order, NAT,
   proto-89 filter) plus two-fault and no-fault control.
 - M9 `runners/claude_cli.py`: `claude -p "/diagnose <symptom>" --output-format stream-json

@@ -20,6 +20,10 @@ class AdminClient(Protocol):
 
     async def status(self) -> dict[str, Any]: ...
 
+    async def exports(self) -> list[dict[str, Any]]: ...
+
+    async def export(self, export_id: str) -> dict[str, Any]: ...
+
 
 class HttpAdmin:
     def __init__(self, base_url: str, token: str, *, timeout: float = 120) -> None:
@@ -27,7 +31,7 @@ class HttpAdmin:
         self.headers = {"Authorization": f"Bearer {token}"}
         self.timeout = timeout
 
-    async def _request(self, method: str, path: str) -> dict[str, Any]:
+    async def _request(self, method: str, path: str) -> Any:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.request(method, f"{self.base_url}{path}", headers=self.headers)
         if response.status_code >= 400:
@@ -40,6 +44,20 @@ class HttpAdmin:
     async def status(self) -> dict[str, Any]:
         return await self._request("GET", "/admin/status")
 
+    async def exports(self) -> list[dict[str, Any]]:
+        return await self._request("GET", "/admin/exports")
+
+    async def export(self, export_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"/admin/exports/{export_id}")
+
+
+async def _no_exports() -> list[dict[str, Any]]:
+    return []
+
+
+async def _no_export(export_id: str) -> dict[str, Any]:
+    raise KeyError(f"unknown export {export_id!r}")
+
 
 class CallableAdmin:
     """Adapter for in-process use: wire `TwinLab.inject` and `TwinLab.status` straight in."""
@@ -48,15 +66,25 @@ class CallableAdmin:
         self,
         inject: Callable[[str], Awaitable[dict[str, Any]]],
         status: Callable[[], dict[str, Any]],
+        exports: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
+        export: Callable[[str], Awaitable[dict[str, Any]]] | None = None,
     ) -> None:
         self._inject = inject
         self._status = status
+        self._exports = exports or _no_exports
+        self._export = export or _no_export
 
     async def inject(self, scenario_id: str) -> dict[str, Any]:
         return await self._inject(scenario_id)
 
     async def status(self) -> dict[str, Any]:
         return self._status()
+
+    async def exports(self) -> list[dict[str, Any]]:
+        return await self._exports()
+
+    async def export(self, export_id: str) -> dict[str, Any]:
+        return await self._export(export_id)
 
 
 def read_admin_token(path: Path | None, *, wsl_distro: str = "Containerlab") -> str:

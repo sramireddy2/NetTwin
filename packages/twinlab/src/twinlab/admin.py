@@ -95,6 +95,10 @@ def register_admin_routes(server: MCPServer, app: TwinLab, token: str) -> None:
             ]
         )
 
+    async def export_detail(request: Request) -> Response:
+        bundle = app.exports.load(request.path_params["export_id"])
+        return JSONResponse(bundle.model_dump(mode="json"))
+
     async def approve(request: Request) -> Response:
         export_id = request.path_params["export_id"]
         bundle = app.decide_export(export_id, approved=True, decided_by="cli")
@@ -111,4 +115,5 @@ def register_admin_routes(server: MCPServer, app: TwinLab, token: str) -> None:
     server.custom_route("/admin/inject/{scenario_id}", methods=["POST"])(guard(inject))
     server.custom_route("/admin/golden", methods=["POST"])(guard(golden))
     server.custom_route("/admin/exports", methods=["GET"])(guard(exports))
+    server.custom_route("/admin/exports/{export_id}", methods=["GET"])(guard(export_detail))
     server.custom_route("/admin/approve/{export_id}", methods=["POST"])(guard(approve))
