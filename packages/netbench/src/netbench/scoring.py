@@ -36,6 +36,13 @@ class Score(BaseModel):
     minimal: bool = Field(
         description="touched only expected nodes with no more ops than the expected fix"
     )
+    restored_golden: bool | None = Field(
+        default=None,
+        description="the twin's content-addressed snapshot after the run equals the golden "
+        "baseline, i.e. the design was restored rather than worked around; None if unmeasured",
+    )
+    golden_snapshot_id: str | None = None
+    after_snapshot_id: str | None = None
     exported: bool
 
 
@@ -50,6 +57,7 @@ def score_run(
     golden_probes: list[dict[str, Any]],
     after_probes: list[dict[str, Any]],
     after_verification: VerificationReport | None = None,
+    golden_snapshot_id: str | None = None,
 ) -> Score:
     causes = scenario.causes
     rc = output.root_cause
@@ -73,6 +81,8 @@ def score_run(
         minimal = not changes
     verified = bool(output.verification and output.verification.passed)
     fix_correct = None if after_verification is None else bool(after_verification.passed)
+    after_id = after_verification.snapshot_id if after_verification is not None else None
+    restored_golden = after_id == golden_snapshot_id if after_id and golden_snapshot_id else None
     exported = bool(output.export and output.export.get("status") in ("approved", "pending"))
     return Score(
         root_cause_node=node_ok,
@@ -86,5 +96,8 @@ def score_run(
         ops_applied=ops_applied,
         ops_expected=ops_expected,
         minimal=minimal,
+        restored_golden=restored_golden,
+        golden_snapshot_id=golden_snapshot_id,
+        after_snapshot_id=after_id,
         exported=exported,
     )

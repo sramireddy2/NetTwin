@@ -147,7 +147,7 @@ async def test_run_prefers_the_export_bundle_and_writes_a_transcript(tmp_path: P
     assert out.cache_read_tokens == 90000 and out.cache_creation_tokens == 8000
     assert len(out.tool_calls) == 13
     assert "turns=9" in out.notes and "agents=5" in out.notes and "rc=0" in out.notes
-    transcript = tmp_path / "transcripts" / "001-ospf-area-mismatch.jsonl"
+    transcript = tmp_path / "transcripts" / "001-ospf-area-mismatch.claude.1.jsonl"
     assert transcript.exists() and transcript.read_text(encoding="utf-8").count("\n") == len(TEAM)
 
 
@@ -186,3 +186,49 @@ async def test_run_records_a_timeout_as_an_empty_output(tmp_path: Path) -> None:
     out = await runner.run(_ctx())
     assert out.root_cause is None and out.change_ids == []
     assert "timed_out" in out.notes and "rc=-1" in out.notes
+
+
+def test_final_text_prefers_the_last_main_thread_message() -> None:
+    import json as _json
+
+    early = {
+        "type": "assistant",
+        "parent_tool_use_id": None,
+        "message": {"content": [{"type": "text", "text": "investigators running"}]},
+    }
+    sub = {
+        "type": "assistant",
+        "parent_tool_use_id": "toolu_x",
+        "message": {"content": [{"type": "text", "text": "subagent chatter"}]},
+    }
+    final = {
+        "type": "assistant",
+        "parent_tool_use_id": None,
+        "message": {"content": [{"type": "text", "text": 'report {"root_cause": null}'}]},
+    }
+    result = {
+        "type": "result",
+        "subtype": "success",
+        "result": "investigators running",
+        "result_index": 0,
+        "num_turns": 4,
+    }
+    summary = parse_stream(_json.dumps(e) for e in (early, sub, final, result))
+    assert summary.final_text.startswith("report") and summary.saw_main_text
+    only_result = parse_stream([_json.dumps(result)])
+    assert only_result.final_text == "investigators running"
+
+
+def test_coerce_root_cause_maps_protocol_names_to_layers() -> None:
+    from netbench.claude_cli import coerce_root_cause
+
+    cause = coerce_root_cause(
+        {"node": "r4", "layer": "bgp", "component": "bgp.route_map", "summary": "s"}
+    )
+    assert cause is not None and cause.layer == "L3" and cause.component == "bgp.route_map"
+    assert (
+        coerce_root_cause({"node": "r4", "layer": "???", "component": "x.y", "summary": "s"}).layer
+        == "host"
+    )
+    assert coerce_root_cause({"node": "r4"}) is None
+    assert coerce_root_cause(None) is None

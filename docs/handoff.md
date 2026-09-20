@@ -64,7 +64,12 @@ base branch was deleted, so it was re-opened as #7):
   scorer; `netbench run --runner claude --model <m> --skill diagnose|diagnose-solo
   [--no-verifier]`. Scoring gained harness-side `fix_correct` (the harness runs its own
   intent_check after every run) so the verifier-off ablation is comparable; report has a
-  "Fix correct" column and RFVC marks. Fixtures in `tests/fixtures/stream/`.
+  "Fix correct" column and RFVC marks. Fixtures in `tests/fixtures/stream/`. Merged as PR #11.
+  First batch (`claude-diagnose-sonnet-p0`, 001-008) recorded in `results/v1` and analysed in
+  lab-notes: verifier prompt revised to p1 (verdict follows intent_check, route_diff against
+  the converged snapshot), `restored_golden` score added, watchdog tree-kill on timeout,
+  baseline guard against a planted twin. Next: run `claude-diagnose-sonnet` (p1) over all 22,
+  then `--no-verifier`, then `--skill diagnose-solo` with and without verifier.
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -129,6 +134,11 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - OSPF probes: when only one side stops receiving hellos, the other side keeps the neighbour
   in Init, so probe `show ip ospf neighbor ethN` with `absent: "Full"` rather than the
   neighbour id.
+- Headless runs: `claude -p` can hang when a subagent's API call stalls; the runner kills the
+  process tree at `--run-timeout` (default 25 min). Stopping a batch mid-run leaves a fault
+  planted: run `nettwin lab golden` before the next batch (the harness refuses a baseline that
+  differs from the matrix's golden id). Transcripts are named
+  `<scenario>.<config>.<trial>.jsonl` under `results/<matrix>/transcripts/`.
 
 ## Decisions the user confirmed
 
