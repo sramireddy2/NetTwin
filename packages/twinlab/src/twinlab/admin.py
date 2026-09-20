@@ -1,4 +1,4 @@
-"""Admin HTTP routes on the twinlab server: fault injection and golden reset.
+"""Admin HTTP routes on the twinlab server: fault injection, golden reset, export approval.
 
 These are deliberately not MCP tools. They sit on the same Starlette app under `/admin`,
 require a bearer token that only the benchmark harness and the `nettwin` CLI hold, and an
@@ -80,7 +80,35 @@ def register_admin_routes(server: MCPServer, app: TwinLab, token: str) -> None:
     async def golden(request: Request) -> Response:
         return JSONResponse(await app.golden())
 
+    async def exports(request: Request) -> Response:
+        bundles = [app.exports.load(i) for i in app.exports.ids()]
+        return JSONResponse(
+            [
+                {
+                    "export_id": b.export_id,
+                    "status": b.status,
+                    "nodes": b.nodes,
+                    "root_cause": f"{b.root_cause.component} on {b.root_cause.node}",
+                    "created_at": b.created_at.isoformat(),
+                }
+                for b in bundles
+            ]
+        )
+
+    async def approve(request: Request) -> Response:
+        export_id = request.path_params["export_id"]
+        bundle = app.decide_export(export_id, approved=True, decided_by="cli")
+        return JSONResponse(
+            {
+                "export_id": bundle.export_id,
+                "status": bundle.status,
+                "path": str(app.exports.path(bundle.export_id)),
+            }
+        )
+
     server.custom_route("/admin/status", methods=["GET"])(guard(status))
     server.custom_route("/admin/scenarios", methods=["GET"])(guard(scenarios))
     server.custom_route("/admin/inject/{scenario_id}", methods=["POST"])(guard(inject))
     server.custom_route("/admin/golden", methods=["POST"])(guard(golden))
+    server.custom_route("/admin/exports", methods=["GET"])(guard(exports))
+    server.custom_route("/admin/approve/{export_id}", methods=["POST"])(guard(approve))

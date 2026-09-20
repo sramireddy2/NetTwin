@@ -12,15 +12,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from nettwin_core.attest import load_or_create_key
 from nettwin_core.executor import DockerExecutor, ExecResult, Executor
-from nettwin_core.models import ChangeResult, Snapshot
+from nettwin_core.models import ChangeResult, RootCause, Snapshot, VerificationReport
 from nettwin_core.ops import Op
+from nettwin_core.policy import policy_sha256
 from nettwin_core.scenario import Scenario, load_scenarios
 from nettwin_core.settings import Settings
 from nettwin_core.topology import Topology, load_topology
 from twinlab import allowlist
 from twinlab.apply import ApplyError, apply_ops, describe_change
 from twinlab.changes import ChangeStore
+from twinlab.export import ExportBundle, ExportStore, new_bundle, validate
 from twinlab.snapshot import SnapshotStore, capture, flush_route_caches, restore
 
 
@@ -35,6 +38,8 @@ class TwinLab:
     executor: Executor
     store: SnapshotStore
     changes: ChangeStore
+    exports: ExportStore
+    attest_key: bytes
     write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_injection: dict[str, Any] | None = None
 
@@ -47,6 +52,8 @@ class TwinLab:
             executor=executor or DockerExecutor(settings.lab_name),
             store=SnapshotStore(settings.snapshots_dir),
             changes=ChangeStore(settings.changes_dir),
+            exports=ExportStore(settings.exports_dir),
+            attest_key=load_or_create_key(settings.attest_key_path),
         )
 
     # --- reads -----------------------------------------------------------------------------
@@ -121,6 +128,35 @@ class TwinLab:
         self.changes.save(change)
         return change
 
+    # --- export gate ---------------------------------------------------------------------
+
+    def prepare_export(
+        self,
+        change_ids: list[str],
+        verification: VerificationReport,
+        root_cause: RootCause,
+        summary: str = "",
+    ) -> ExportBundle:
+        """Validate an export request and record it as pending. The decision comes later."""
+        changes = [self.changes.load(c) for c in change_ids]
+        validate(changes, verification, self.attest_key, policy_sha256(self.settings.policy_path))
+        bundle = new_bundle(changes, verification, root_cause, summary)
+        self.exports.save(bundle)
+        return bundle
+
+    def decide_export(
+        self, export_id: str, approved: bool, decided_by: str, note: str = ""
+    ) -> ExportBundle:
+        bundle = self.exports.load(export_id)
+        if bundle.status != "pending":
+            raise ValueError(f"export {export_id} is already {bundle.status}")
+        bundle.status = "approved" if approved else "declined"
+        bundle.decided_at = datetime.now(UTC)
+        bundle.decided_by = decided_by
+        bundle.note = note
+        self.exports.save(bundle)
+        return bundle
+
     # --- admin: never exposed as MCP tools ---------------------------------------------------
 
     @property
@@ -185,6 +221,8 @@ class TwinLab:
             "golden_snapshot": self.golden_id,
             "snapshots": len(self.store.ids()),
             "changes": len(self.changes.ids()),
+            "exports": len(self.exports.ids()),
+            "bench_mode": self.settings.bench,
             "last_injection": self.last_injection,
             "scenarios": [s.id for s in self.scenarios()]
             if self.settings.scenarios_dir.exists()
