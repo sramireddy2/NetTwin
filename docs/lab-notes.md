@@ -213,3 +213,21 @@ recorded in `results/v0/runs.jsonl`. Mean 33 s per run, 16 min 42 s wall clock. 
 skewed by the first run: its `wait_converged` call, given a 60 s budget, returned after 153 s,
 so one poll of the concurrent show commands stalled for about 90 s. The other 13 runs took 18
 to 43 s and the stall did not recur in the other 29 fake-agent runs of the day.
+
+## Claude Code roles and the manual runner (M7)
+
+`.claude/agents/` holds five subagent role files (three read-only investigators, the change
+agent, the verifier) and `.claude/skills/` the `/diagnose` and `/diagnose-solo` workflows;
+`docs/diagnose.md` is the runbook. `tests/unit/test_roles.py` parses the frontmatter and
+checks every tool name against the live tool lists of both servers, that the investigators
+hold only `run_show_command`, that the change agent cannot export, and that the verifier is
+scoped to netverify.
+
+To score an interactive run, `netbench run --runner manual` resets and injects as usual,
+prints the symptom, then polls twinlab's admin route for a new export bundle and scores it
+once the operator has decided. Live check (2026-09-20), servers in bench mode, with a
+scripted stand-in replaying the expected fix over HTTP in place of the Claude Code session:
+scenario 001 was injected 50 s after start (baseline, reset, inject, convergence), the export
+`4ac8ba67607e` was picked up within one poll and scored `RVC` (36 s from injection to score),
+and the twin was rolled back to golden afterwards. The real interactive run with Claude Code
+subagents is still to be done; `docs/diagnose.md` has the steps.

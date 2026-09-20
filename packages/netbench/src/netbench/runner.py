@@ -9,11 +9,15 @@ against.
 
 from __future__ import annotations
 
+import asyncio
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from netbench.admin import AdminClient
 from netbench.clients import ToolClient
 from nettwin_core.models import RootCause, VerificationReport
 from nettwin_core.scenario import Scenario
@@ -122,4 +126,73 @@ class FakeAgentRunner:
             export=export,
             tool_calls=collect_calls(ctx.twin, ctx.verify),
             notes="fake agent replayed expected_fix",
+        )
+
+
+class ManualRunner:
+    """Scores a run made by a human or an interactive Claude Code session.
+
+    The harness resets and injects as usual. This runner then prints the symptom and waits
+    for a new export bundle to appear through twinlab's admin route while the operator runs
+    /diagnose in Claude Code. The bundle carries the root cause, the change ids and the
+    verification report, which is everything the scorer needs. Tool calls are not recorded
+    here; the Claude Code transcript has them.
+    """
+
+    name = "manual"
+
+    def __init__(
+        self,
+        admin: AdminClient,
+        *,
+        timeout: float = 1800,
+        poll: float = 5.0,
+        decision_wait: float = 180,
+        notify: Callable[[str], None] = print,
+    ) -> None:
+        self.admin = admin
+        self.timeout = timeout
+        self.poll = poll
+        self.decision_wait = decision_wait
+        self.notify = notify
+
+    async def run(self, ctx: RunContext) -> RunOutput:
+        seen = {e["export_id"] for e in await self.admin.exports()}
+        self.notify(
+            f"\n=== {ctx.scenario_id} is injected. Symptom:\n{ctx.symptom}\n"
+            f"Run /diagnose in Claude Code now. Waiting up to {self.timeout:.0f}s for an "
+            "export bundle to appear...\n"
+        )
+        deadline = time.monotonic() + self.timeout
+        while True:
+            new = [e for e in await self.admin.exports() if e["export_id"] not in seen]
+            if new:
+                bundle = await self._wait_for_decision(new[-1]["export_id"])
+                self.notify(f"=== export {bundle['export_id']} is {bundle['status']}\n")
+                return self.output_from_bundle(bundle)
+            if time.monotonic() >= deadline:
+                return RunOutput(notes=f"no export appeared within {self.timeout:.0f}s")
+            await asyncio.sleep(self.poll)
+
+    async def _wait_for_decision(self, export_id: str) -> dict[str, Any]:
+        """A bundle is saved as pending while the operator looks at the approval dialog."""
+        deadline = time.monotonic() + self.decision_wait
+        while True:
+            bundle = await self.admin.export(export_id)
+            if bundle["status"] != "pending" or time.monotonic() >= deadline:
+                return bundle
+            await asyncio.sleep(self.poll)
+
+    @staticmethod
+    def output_from_bundle(bundle: dict[str, Any]) -> RunOutput:
+        return RunOutput(
+            root_cause=RootCause.model_validate(bundle["root_cause"]),
+            change_ids=[c["change_id"] for c in bundle["changes"]],
+            verification=VerificationReport.model_validate(bundle["verification"]),
+            export={
+                "export_id": bundle["export_id"],
+                "status": bundle["status"],
+                "decided_by": bundle.get("decided_by"),
+            },
+            notes="interactive run; output read from the export bundle",
         )

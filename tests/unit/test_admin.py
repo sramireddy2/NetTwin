@@ -6,9 +6,12 @@ import httpx
 import pytest
 
 from nettwin_core.executor import FakeExecutor
+from nettwin_core.models import ChangeResult, RootCause, RuleResult, VerificationReport
+from nettwin_core.ops import SetMtu
 from nettwin_core.settings import Settings
 from twinlab.admin import load_or_create_token
 from twinlab.app import TwinLab
+from twinlab.export import new_bundle
 from twinlab.server import build_server
 
 LAB = Path(__file__).resolve().parents[2] / "lab"
@@ -87,3 +90,41 @@ async def test_server_without_token_has_no_admin_routes(tmp_path: Path) -> None:
         transport=httpx.ASGITransport(app=asgi), base_url="http://localhost"
     ) as client:
         assert (await client.get("/admin/status", headers=AUTH)).status_code == 404
+
+
+async def test_admin_export_detail_returns_the_whole_bundle(tmp_path: Path) -> None:
+    settings = Settings.from_env(
+        {"NETTWIN_STATE_DIR": str(tmp_path), "NETTWIN_TOPOLOGY": str(LAB / "topology.clab.yml")}
+    )
+    app = TwinLab.from_settings(settings, executor=FakeExecutor().on(_scripted))
+    change = ChangeResult(
+        change_id="c1",
+        node="r2",
+        before_snapshot_id="a" * 64,
+        after_snapshot_id="b" * 64,
+        diff="",
+        ops=[SetMtu(iface="eth4", mtu=1500)],
+    )
+    report = VerificationReport(
+        passed=True,
+        snapshot_id="b" * 64,
+        policy_sha256="c" * 64,
+        rules=[RuleResult(rule_id="x", kind="reach", passed=True)],
+    )
+    cause = RootCause(node="r2", layer="L2", component="link.mtu", summary="s")
+    bundle = new_bundle([change], report, cause, "summary")
+    app.exports.save(bundle)
+    asgi = build_server(app, admin_token="secret").streamable_http_app()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=asgi), base_url="http://localhost"
+    ) as client:
+        listed = await client.get("/admin/exports", headers=AUTH)
+        assert [e["export_id"] for e in listed.json()] == [bundle.export_id]
+        detail = await client.get(f"/admin/exports/{bundle.export_id}", headers=AUTH)
+        assert detail.status_code == 200, detail.text
+        body = detail.json()
+        assert body["status"] == "pending"
+        assert body["changes"][0]["change_id"] == "c1"
+        assert body["root_cause"]["component"] == "link.mtu"
+        assert body["verification"]["passed"] is True
+        assert (await client.get("/admin/exports/nope", headers=AUTH)).status_code == 404

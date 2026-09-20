@@ -405,6 +405,7 @@ dependencies = [
     { name = "httpx" },
     { name = "mcp" },
     { name = "nettwin-core" },
+    { name = "pyyaml" },
     { name = "typer" },
 ]
 
@@ -413,6 +414,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "mcp", specifier = ">=1.12" },
     { name = "nettwin-core", editable = "packages/nettwin_core" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "typer", specifier = ">=0.15" },
 ]
 

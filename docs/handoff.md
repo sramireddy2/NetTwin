@@ -41,6 +41,12 @@ branch was deleted, so it was re-opened as #7):
   record per run, resumable by run id), `FakeAgentRunner` replaying `expected_fix`, structured
   scoring (root cause node+component, verified, collateral vs golden matrix, minimal), markdown
   report, `netbench run|report` CLI, twinlab `get_change` tool, `make serve-bench`.
+- M7 claude agents (branch `feat/claude-agents`, PR open): `.claude/agents/` role files
+  (l2/l3/policy investigators with `run_show_command` only, change-agent without export,
+  verifier scoped to netverify), `.claude/skills/diagnose` and `diagnose-solo`,
+  `netbench.roles` (frontmatter parser, reused by M10), `ManualRunner` + `netbench run
+  --runner manual` to score an interactive run through the new `/admin/exports/{id}` route,
+  `docs/diagnose.md` runbook. Manual runner proven live with a scripted stand-in (001, RVC).
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -94,6 +100,9 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - Long lab tests: `pytest -q` prints nothing until the end. Launch them detached
   (`nohup uv run pytest ... > ~/.nettwin/logs/x.log &`) and watch the log; a Bash tool call
   cannot block that long.
+- This desktop session (opened in the OneDrive folder, moved with change_directory) never
+  loaded the project `.mcp.json` servers, so `/diagnose` could not be exercised from it.
+  Sessions opened in the repo do load them.
 
 ## Decisions the user confirmed
 
@@ -112,12 +121,13 @@ golden scripts flush route caches; snapshot ids exclude routes (derived) and bri
 
 ## Next milestones
 
-- M7 `feat/claude-agents`: `.claude/agents/{l2,l3,policy}-investigator.md` (twinlab read tools
-  only), `change-agent.md` (twinlab read + apply/snapshot/rollback, no export), `verifier.md`
-  (`mcpServers: [netverify]` only), all `model: inherit`, none with Bash/Read/Write;
-  `.claude/skills/diagnose/SKILL.md` (main thread: snapshot S0, parallel investigators, change
-  agent, verifier with only S0/S1/policy/symptom, export_change or rollback+retry ≤2,
-  `--no-verifier` arg) and `diagnose-solo`. `.mcp.json` and `.claude/settings.json` already exist.
+- M7 remaining: one real interactive run. Open Claude Code in the repo (a session opened
+  elsewhere does not load `.mcp.json`; `/mcp` must list twinlab and netverify), start the
+  servers WITHOUT NETTWIN_BENCH (`make -C lab serve`) so the export approval is an
+  elicitation dialog, run `uv run netbench run --runner manual --scenarios 001 --matrix
+  interactive` in another window, then `/diagnose <symptom>` in Claude Code, approve, check
+  that the verifier subagent transcript holds only S0/S1/policy/symptom, record the score in
+  lab-notes, tune the role prompts if needed, merge the PR.
 - M8 tier B/C scenarios 015–020 (VLAN access/trunk/subinterface tag; nft ACL order, NAT,
   proto-89 filter) plus two-fault and no-fault control.
 - M9 `runners/claude_cli.py`: `claude -p "/diagnose <symptom>" --output-format stream-json

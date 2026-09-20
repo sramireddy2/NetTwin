@@ -48,7 +48,9 @@ flowchart TB
 
 ## Status
 
-Design complete, build in progress. See [docs/design.md](docs/design.md) for the architecture, parts, contracts, scenarios, and tradeoffs, and [docs/roadmap.md](docs/roadmap.md) for the milestone plan.
+Lab, both MCP servers, the export gate and the NetBench harness are in and verified against the live twin (the scripted fake agent scores 100 % on the 14 tier-A scenarios; see [docs/lab-notes.md](docs/lab-notes.md)). The Claude Code agent team and the `/diagnose` and `/diagnose-solo` skills are wired up; [docs/diagnose.md](docs/diagnose.md) explains how to run and score an incident interactively. Next: tier B/C scenarios, the headless Claude runner and the local-model baseline.
+
+See [docs/design.md](docs/design.md) for the architecture, parts, contracts, scenarios, and tradeoffs, and [docs/roadmap.md](docs/roadmap.md) for the milestone plan.
 
 ## Layout
 
