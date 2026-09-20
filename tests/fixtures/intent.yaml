@@ -1,0 +1,12 @@
+version: 1
+targets:
+  h1: {node: h1, ip: 10.0.30.10}
+  srv: {node: srv, ip: 10.0.40.10}
+rules:
+  - {kind: reach, id: reach-h1-srv, src: h1, dst: srv}
+  - {kind: reach, id: deny-h1-srv-ssh, src: h1, dst: srv, proto: tcp, port: 22, expect: deny}
+  - {kind: path_mtu, id: mtu-h1-srv, src: h1, dst: srv, min_mtu: 1500}
+  - {kind: ospf_full, id: core-ospf-r1-eth2, node: r1, iface: eth2}
+  - {kind: bgp_established, id: ebgp-r4-isp, node: r4, peer: 203.0.113.2}
+  - {kind: no_route_leak, id: no-leak-isp, node: isp, prefixes: ["10.0.0.0/8"]}
+  - {kind: no_spof, id: core-spof, nodes: [r1, r2, r3]}
