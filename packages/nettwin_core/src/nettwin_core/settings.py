@@ -21,6 +21,7 @@ class Settings:
     admin_token: str | None
     topology_path: Path
     scenarios_dir: Path
+    policy_path: Path
 
     @property
     def snapshots_dir(self) -> Path:
@@ -63,6 +64,7 @@ class Settings:
             admin_token=env.get("NETTWIN_ADMIN_TOKEN") or None,
             topology_path=Path(env.get("NETTWIN_TOPOLOGY", "lab/topology.clab.yml")),
             scenarios_dir=Path(env.get("NETTWIN_SCENARIOS", "lab/scenarios")),
+            policy_path=Path(env.get("NETTWIN_POLICY", "lab/policy/intent.yaml")),
         )
 
     def ensure_dirs(self) -> None:

@@ -21,3 +21,5 @@ setaddr eth3.10 10.0.10.1/24
 setaddr eth3.20 10.0.20.1/24
 nft flush ruleset
 nft -f /nft.conf
+# Drop cached path MTUs so probes see the real path after a change.
+ip route flush cache

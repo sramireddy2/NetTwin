@@ -83,3 +83,26 @@ def test_rejected(cmd: str) -> None:
     with pytest.raises(CommandNotAllowed) as excinfo:
         check(cmd)
     assert "Allowed forms include" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    ["nc -z -w 2 10.0.40.10 80", "nc -z -v -w 1 10.0.40.10 22"],
+)
+def test_nc_connect_probe_is_allowed(cmd: str) -> None:
+    assert check(cmd).family == "kernel"
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "nc -l -p 80",
+        "nc 10.0.40.10 80",
+        "nc -z -w 9 10.0.40.10 80",
+        "nc -z -w 2 srv 80",
+        "nc -z -e /bin/sh 10.0.40.10 80",
+    ],
+)
+def test_nc_other_forms_are_rejected(cmd: str) -> None:
+    with pytest.raises(CommandNotAllowed):
+        check(cmd)

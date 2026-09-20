@@ -20,9 +20,7 @@ start() {
   echo "$name pid $! log $LOGS/$name.log"
 }
 start twinlab-server
-if uv run netverify-server --help >/dev/null 2>&1; then
-  start netverify-server
-fi
+start netverify-server
 
 stop() {
   echo "stopping servers"
