@@ -42,6 +42,7 @@ packages = ["src/nettwin"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
   "lab: needs the live containerlab lab inside WSL (set NETTWIN_LAB=1)",

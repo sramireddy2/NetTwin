@@ -3,6 +3,10 @@
     "twinlab": {
       "type": "http",
       "url": "http://localhost:8001/mcp"
+    },
+    "netverify": {
+      "type": "http",
+      "url": "http://localhost:8002/mcp"
     }
   }
 }
