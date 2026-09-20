@@ -73,7 +73,14 @@ def _text(result: CallToolResult) -> str:
 async def test_tools_and_resource_are_listed(app: TwinLab) -> None:
     async with connected(app) as session:
         tools = {t.name for t in (await session.list_tools()).tools}
-        assert tools == {"run_show_command", "snapshot", "list_snapshots", "rollback"}
+        assert tools == {
+            "run_show_command",
+            "snapshot",
+            "list_snapshots",
+            "rollback",
+            "apply_config",
+            "list_changes",
+        }
         resources = {str(r.uri) for r in (await session.list_resources()).resources}
         assert "lab://topology" in resources
         body = await session.read_resource("lab://topology")
@@ -117,3 +124,24 @@ async def test_snapshot_list_and_rollback(app: TwinLab) -> None:
         assert rolled.structured_content["changed_nodes"] == {}
         missing = await session.call_tool("rollback", {"snapshot_id": "0" * 12})
         assert missing.is_error and "unknown snapshot" in _text(missing)
+
+
+async def test_apply_config_records_a_change(app: TwinLab) -> None:
+    async with connected(app) as session:
+        applied = await session.call_tool(
+            "apply_config",
+            {
+                "node": "r1",
+                "ops": [{"kind": "set_mtu", "iface": "eth1", "mtu": 1400}],
+                "rationale": "test",
+            },
+        )
+        assert not applied.is_error, _text(applied)
+        change_id = applied.structured_content["change_id"]
+        assert applied.structured_content["node"] == "r1"
+        listed = await session.call_tool("list_changes", {})
+        assert listed.structured_content["changes"] == [change_id]
+        bad = await session.call_tool(
+            "apply_config", {"node": "r1", "ops": [{"kind": "shell", "cmd": "id"}]}
+        )
+        assert bad.is_error

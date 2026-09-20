@@ -1,0 +1,29 @@
+id: 006-bgp-missing-network
+title: Server subnet no longer advertised to the ISP
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: external partners cannot reach the file server (10.0.40.10) since this
+  morning. Internal users are unaffected. The ISP says they stopped receiving one of our
+  prefixes.
+inject:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " address-family ipv4 unicast"
+        - "  no network 10.0.40.0/24"
+ground_truth:
+  node: r4
+  layer: L3
+  component: bgp.network
+  summary: the 'network 10.0.40.0/24' statement was removed from r4's BGP address family
+expected_fix:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " address-family ipv4 unicast"
+        - "  network 10.0.40.0/24"
+expected_failed_rules: [inet-to-srv]
+probe: {node: inet, cmd: ping -c 1 -W 1 10.0.40.10, expect: fail}

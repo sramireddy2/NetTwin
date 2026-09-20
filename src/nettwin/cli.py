@@ -100,9 +100,14 @@ def lab_test() -> None:
 
 @lab_app.command("inject")
 def lab_inject(scenario: str) -> None:
-    """Inject a NetBench fault scenario through the twinlab admin route (milestone M3)."""
-    typer.echo(f"inject {scenario}: available from milestone M3", err=True)
-    raise typer.Exit(2)
+    """Plant a NetBench fault through the twinlab admin route (server must be running)."""
+    _run_make("inject", [f"ID={scenario}"])
+
+
+@lab_app.command("status")
+def lab_status() -> None:
+    """Show twinlab status: golden snapshot, last injection, counts."""
+    _run_make("status")
 
 
 @app.command()

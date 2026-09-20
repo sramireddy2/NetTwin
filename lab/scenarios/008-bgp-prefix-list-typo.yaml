@@ -1,0 +1,26 @@
+id: 008-bgp-prefix-list-typo
+title: Prefix-list typo drops the corporate VLAN from the ISP announcement
+tier: A
+layer: policy
+symptom: >
+  NOC ticket: users on VLAN 10 lost internet access after a "prefix-list cleanup". The
+  guest VLAN still has internet. Internal reachability is fine and the BGP session is up.
+inject:
+  r4:
+    - kind: frr_lines
+      lines:
+        - no ip prefix-list CORP seq 10 permit 10.0.10.0/24
+        - ip prefix-list CORP seq 10 permit 10.0.11.0/24
+ground_truth:
+  node: r4
+  layer: policy
+  component: bgp.prefix_list
+  summary: prefix-list CORP permits 10.0.11.0/24 instead of 10.0.10.0/24, so the corporate VLAN is no longer advertised and return traffic has no route
+expected_fix:
+  r4:
+    - kind: frr_lines
+      lines:
+        - no ip prefix-list CORP seq 10 permit 10.0.11.0/24
+        - ip prefix-list CORP seq 10 permit 10.0.10.0/24
+expected_failed_rules: [corp-to-inet]
+probe: {node: h10, cmd: ping -c 1 -W 1 198.51.100.10, expect: fail}

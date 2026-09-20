@@ -20,10 +20,23 @@ class Settings:
     bench: bool
     admin_token: str | None
     topology_path: Path
+    scenarios_dir: Path
 
     @property
     def snapshots_dir(self) -> Path:
         return self.state_dir / "snapshots"
+
+    @property
+    def changes_dir(self) -> Path:
+        return self.state_dir / "changes"
+
+    @property
+    def admin_token_path(self) -> Path:
+        return self.state_dir / "admin.token"
+
+    @property
+    def golden_marker(self) -> Path:
+        return self.state_dir / "golden.id"
 
     @property
     def exports_dir(self) -> Path:
@@ -49,8 +62,15 @@ class Settings:
             bench=env.get("NETTWIN_BENCH", "").strip().lower() in TRUE_VALUES,
             admin_token=env.get("NETTWIN_ADMIN_TOKEN") or None,
             topology_path=Path(env.get("NETTWIN_TOPOLOGY", "lab/topology.clab.yml")),
+            scenarios_dir=Path(env.get("NETTWIN_SCENARIOS", "lab/scenarios")),
         )
 
     def ensure_dirs(self) -> None:
-        for directory in (self.state_dir, self.snapshots_dir, self.exports_dir, self.lab_run_dir):
+        for directory in (
+            self.state_dir,
+            self.snapshots_dir,
+            self.changes_dir,
+            self.exports_dir,
+            self.lab_run_dir,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
