@@ -1,0 +1,26 @@
+id: 001-ospf-area-mismatch
+title: OSPF area mismatch on the r1-r3 link
+tier: A
+layer: L3
+symptom: >
+  Hosts behind r3 cannot reach the server subnet. r1 shows no OSPF neighbour on eth2.
+inject:
+  r3:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " ip ospf area 0.0.0.1"
+ground_truth:
+  node: r3
+  layer: L3
+  component: ospf.area
+  summary: r3 eth2 was moved to area 1 while r1 eth2 stays in area 0
+expected_fix:
+  r3:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " ip ospf area 0.0.0.0"
+expected_failed_rules:
+  - core-ospf-r1-eth2
+  - reach-h1-srv

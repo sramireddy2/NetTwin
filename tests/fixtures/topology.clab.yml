@@ -1,0 +1,34 @@
+name: fixture
+topology:
+  kinds:
+    linux:
+      image: alpine:3.20
+  nodes:
+    r1:
+      kind: linux
+      image: nettwin/frr:dev
+      labels:
+        role: router
+    r2:
+      kind: linux
+      image: nettwin/frr:dev
+      labels:
+        role: router
+    r3:
+      kind: linux
+      image: nettwin/frr:dev
+      labels:
+        role: router
+    h1:
+      kind: linux
+      labels:
+        role: host
+  links:
+    - endpoints: ["r1:eth1", "r2:eth1"]
+    - endpoints: ["r2:eth2", "r3:eth1"]
+    - endpoints: ["r3:eth2", "r1:eth2"]
+    - endpoints:
+        - node: r3
+          interface: eth3
+        - node: h1
+          interface: eth1
