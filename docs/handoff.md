@@ -13,7 +13,7 @@ file: `~/.claude/plans/recommended-combination-claude-code-lexical-galaxy.md`; c
 
 ## Where the build stands
 
-Merged to `main` (PRs #1 #2 #3 #4 #5 #7; #6 was auto-closed by GitHub when its stacked base
+Merged to `main` (PRs #1 #2 #3 #4 #5 #7 #8; #6 was auto-closed by GitHub when its stacked base
 branch was deleted, so it was re-opened as #7):
 
 - M0 scaffold: uv workspace (`nettwin` CLI + `packages/{nettwin_core,twinlab,netverify,netbench}`),
