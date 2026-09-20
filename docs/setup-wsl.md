@@ -37,6 +37,29 @@ Docker Desktop, Settings, Resources, WSL integration: make sure the Containerlab
 containerlab cannot reach the containers. `nettwin doctor` reports "Docker Desktop" in the
 engine line when this is wrong.
 
+## 2b. Keep the distro alive
+
+WSL2 shuts the VM down about a minute after the last Windows-side session closes, even
+with Docker running inside. On the next command Docker restarts the containers, but the
+veth links containerlab created are gone: every node keeps only its management interface
+and the lab is silently dead. Two defences:
+
+- While working, keep a session open from Windows, for example in a spare terminal:
+
+  ```powershell
+  wsl -d Containerlab -- sleep infinity
+  ```
+
+  (`nettwin serve`, from milestone M2, is a long-running process that does the same.)
+- Raise the idle timeout in `%USERPROFILE%\.wslconfig` (Windows 11), then `wsl --shutdown`:
+
+  ```ini
+  [wsl2]
+  vmIdleTimeout=3600000
+  ```
+
+`nettwin lab up` always redeploys with `--reconfigure`, so a stale lab is fixed by rerunning it.
+
 ## 3. Tools inside the distro
 
 ```bash

@@ -1,0 +1,5 @@
+# End host and switch image: Alpine with iproute2 (bridge, vlan), iputils (ping -M do),
+# iperf3 and curl for reachability probes.
+FROM alpine:3.20
+RUN apk add --no-cache iproute2 iputils iperf3 tcpdump curl bash
+CMD ["sleep", "infinity"]

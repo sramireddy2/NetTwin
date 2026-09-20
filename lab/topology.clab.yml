@@ -1,0 +1,125 @@
+# NetTwin reference topology.
+#
+# Deployed by `make up` from ~/.nettwin/lab-run (a synced copy of this directory), so every
+# bind path below is relative to that copy. `configs/` holds the golden state and is mounted
+# read-only; `live/` is a per-deploy copy that FRR may write to.
+#
+#            isp ---- r4 (edge, eBGP, NAT for guests)
+#                    /  \
+#   sw1 ---- r3 ---- r1 ---- r2 ---- srv
+#   |  \      \______________/
+#  h10  h20   (r3 dual-homed to r1 and r2, OSPF area 1; core is area 0)
+name: nettwin
+
+topology:
+  kinds:
+    linux:
+      sysctls:
+        net.ipv4.ip_forward: 1
+        net.ipv4.conf.all.rp_filter: 0
+        net.ipv4.conf.default.rp_filter: 0
+        net.ipv6.conf.all.disable_ipv6: 1
+
+  nodes:
+    r1:
+      kind: linux
+      image: nettwin/frr:dev
+      labels: { role: router }
+      binds:
+        - live/r1/frr.conf:/etc/frr/frr.conf
+        - live/daemons:/etc/frr/daemons
+        - configs/r1/frr.conf:/golden/frr.conf:ro
+        - configs/r1/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+    r2:
+      kind: linux
+      image: nettwin/frr:dev
+      labels: { role: router }
+      binds:
+        - live/r2/frr.conf:/etc/frr/frr.conf
+        - live/daemons:/etc/frr/daemons
+        - configs/r2/frr.conf:/golden/frr.conf:ro
+        - configs/r2/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+    r3:
+      kind: linux
+      image: nettwin/frr:dev
+      labels: { role: router }
+      binds:
+        - live/r3/frr.conf:/etc/frr/frr.conf
+        - live/daemons:/etc/frr/daemons
+        - configs/r3/frr.conf:/golden/frr.conf:ro
+        - configs/r3/setup.sh:/setup.sh:ro
+        - configs/r3/nft.conf:/nft.conf:ro
+      exec: ["sh /setup.sh"]
+    r4:
+      kind: linux
+      image: nettwin/frr:dev
+      labels: { role: router }
+      binds:
+        - live/r4/frr.conf:/etc/frr/frr.conf
+        - live/daemons:/etc/frr/daemons
+        - configs/r4/frr.conf:/golden/frr.conf:ro
+        - configs/r4/setup.sh:/setup.sh:ro
+        - configs/r4/nft.conf:/nft.conf:ro
+      exec: ["sh /setup.sh"]
+    isp:
+      kind: linux
+      image: nettwin/frr:dev
+      labels: { role: router }
+      binds:
+        - live/isp/frr.conf:/etc/frr/frr.conf
+        - live/daemons:/etc/frr/daemons
+        - configs/isp/frr.conf:/golden/frr.conf:ro
+        - configs/isp/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+
+    sw1:
+      kind: linux
+      image: nettwin/host:dev
+      labels: { role: switch }
+      binds:
+        - configs/sw1/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+
+    h10:
+      kind: linux
+      image: nettwin/host:dev
+      labels: { role: host }
+      binds:
+        - configs/h10/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+    h20:
+      kind: linux
+      image: nettwin/host:dev
+      labels: { role: host }
+      binds:
+        - configs/h20/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+    srv:
+      kind: linux
+      image: nettwin/host:dev
+      labels: { role: host }
+      binds:
+        - configs/srv/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+    inet:
+      kind: linux
+      image: nettwin/host:dev
+      labels: { role: host }
+      binds:
+        - configs/inet/setup.sh:/setup.sh:ro
+      exec: ["sh /setup.sh"]
+
+  links:
+    - endpoints: ["r1:eth1", "r2:eth1"]    # 10.0.12.0/30, area 0
+    - endpoints: ["r1:eth2", "r3:eth1"]    # 10.0.13.0/30, area 1
+    - endpoints: ["r1:eth3", "r4:eth1"]    # 10.0.14.0/30, area 0
+    - endpoints: ["r2:eth2", "r3:eth2"]    # 10.0.23.0/30, area 1
+    - endpoints: ["r2:eth3", "r4:eth2"]    # 10.0.24.0/30, area 0
+    - endpoints: ["r2:eth4", "srv:eth1"]   # 10.0.40.0/24, server subnet
+    - endpoints: ["r3:eth3", "sw1:eth1"]   # 802.1Q trunk, VLAN 10 and 20
+    - endpoints: ["r4:eth3", "isp:eth1"]   # 203.0.113.0/30, eBGP 65001 <-> 65000
+    - endpoints: ["isp:eth2", "inet:eth1"] # 198.51.100.0/24, "the internet"
+    - endpoints: ["sw1:eth2", "h10:eth1"]  # access VLAN 10, corporate
+    - endpoints: ["sw1:eth3", "h20:eth1"]  # access VLAN 20, guest

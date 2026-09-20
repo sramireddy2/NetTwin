@@ -1,0 +1,36 @@
+# Intent policy for the reference topology. netverify.intent_check evaluates every rule
+# against the live twin; check.sh mirrors the reach rules with plain pings.
+version: 1
+
+targets:
+  h10:  {node: h10,  ip: 10.0.10.10}     # corporate host, VLAN 10
+  h20:  {node: h20,  ip: 10.0.20.10}     # guest host, VLAN 20
+  srv:  {node: srv,  ip: 10.0.40.10}     # file server behind r2
+  inet: {node: inet, ip: 198.51.100.10}  # host behind the ISP
+
+rules:
+  # Reachability intent
+  - {kind: reach,    id: corp-to-srv,     src: h10,  dst: srv}
+  - {kind: path_mtu, id: corp-to-srv-mtu, src: h10,  dst: srv, min_mtu: 1500}
+  - {kind: reach,    id: corp-to-inet,    src: h10,  dst: inet}
+  - {kind: reach,    id: guest-to-inet,   src: h20,  dst: inet}
+  - {kind: reach,    id: guest-no-srv,    src: h20,  dst: srv,  expect: deny}
+  - {kind: reach,    id: inet-to-srv,     src: inet, dst: srv}
+  - {kind: reach,    id: inet-no-guest,   src: inet, dst: h20,  expect: deny}
+
+  # Control plane intent
+  - {kind: ospf_full, id: ospf-r1-eth1, node: r1, iface: eth1}
+  - {kind: ospf_full, id: ospf-r1-eth2, node: r1, iface: eth2}
+  - {kind: ospf_full, id: ospf-r1-eth3, node: r1, iface: eth3}
+  - {kind: ospf_full, id: ospf-r2-eth1, node: r2, iface: eth1}
+  - {kind: ospf_full, id: ospf-r2-eth2, node: r2, iface: eth2}
+  - {kind: ospf_full, id: ospf-r2-eth3, node: r2, iface: eth3}
+  - {kind: ospf_full, id: ospf-r3-eth1, node: r3, iface: eth1}
+  - {kind: ospf_full, id: ospf-r3-eth2, node: r3, iface: eth2}
+  - {kind: ospf_full, id: ospf-r4-eth1, node: r4, iface: eth1}
+  - {kind: ospf_full, id: ospf-r4-eth2, node: r4, iface: eth2}
+  - {kind: bgp_established, id: ebgp-r4-isp, node: r4, peer: 203.0.113.2}
+
+  # Policy intent
+  - {kind: no_route_leak, id: no-guest-leak, node: isp, prefixes: ["10.0.20.0/24"]}
+  - {kind: no_spof, id: core-spof, nodes: [r1, r2, r3, r4]}
