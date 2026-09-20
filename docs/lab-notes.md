@@ -206,3 +206,10 @@ Lab result (2026-09-20), `NETTWIN_LAB=1 uv run pytest tests/lab/test_fake_agent.
 
 All 14 scenarios scored `RVC`. Wall clock 13 min 18 s, which includes the two rollbacks
 and the convergence waits around every run; the agent's own part averages 22 s.
+
+CLI over HTTP from Windows (2026-09-20), `uv run netbench run --runner fake --matrix v0`
+against `make serve-bench`: the same 14/14 `RVC`, 0 errors, 14/14 exports auto-approved,
+recorded in `results/v0/runs.jsonl`. Mean 33 s per run, 16 min 42 s wall clock. The mean is
+skewed by the first run: its `wait_converged` call, given a 60 s budget, returned after 153 s,
+so one poll of the concurrent show commands stalled for about 90 s. The other 13 runs took 18
+to 43 s and the stall did not recur in the other 29 fake-agent runs of the day.
