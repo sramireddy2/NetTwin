@@ -15,7 +15,7 @@ export PATH := $(HOME)/.local/bin:$(PATH)
 export UV_PROJECT_ENVIRONMENT ?= $(HOME)/.venvs/nettwin
 export NETTWIN_STATE_DIR ?= $(HOME)/.nettwin
 
-.PHONY: help images sync deploy up down golden converge check shell serve stop-serve test-lab inject status golden-remote
+.PHONY: help images sync deploy up down golden converge check shell serve stop-serve test-lab inject status golden-remote exports approve
 ADMIN_URL ?= http://localhost:8001
 ADMIN_TOKEN = $(shell cat $(NETTWIN_STATE_DIR)/admin.token 2>/dev/null)
 CURL_ADMIN = curl -sS -H "Authorization: Bearer $(ADMIN_TOKEN)"
@@ -80,3 +80,10 @@ status:
 
 golden-remote:
 	@$(CURL_ADMIN) -X POST $(ADMIN_URL)/admin/golden; echo
+
+exports:
+	@$(CURL_ADMIN) $(ADMIN_URL)/admin/exports; echo
+
+approve:
+	@test -n "$(ID)" || { echo "usage: make approve ID=<export_id>"; exit 2; }
+	@$(CURL_ADMIN) -X POST $(ADMIN_URL)/admin/approve/$(ID); echo
