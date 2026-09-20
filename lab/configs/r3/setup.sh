@@ -2,6 +2,9 @@
 # Golden kernel state for r3: trunk sub-interfaces for VLAN 10/20 and the guest packet filter.
 # Sub-interfaces are recreated so a fault that retagged one is undone. Idempotent.
 set -e
+# Drop the containerlab management default route (distance 0 in FRR) so the routing
+# protocols' default is what gets installed.
+ip route del default dev eth0 2>/dev/null || true
 setaddr() { ip -4 addr flush dev "$1"; ip addr add "$2" dev "$1"; ip link set dev "$1" mtu "${3:-1500}" up; }
 ip -4 addr flush dev lo scope global
 ip addr add 10.255.0.3/32 dev lo

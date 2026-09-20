@@ -44,15 +44,7 @@ down:
 	cd $(LAB_RUN) && $(CLAB) destroy -t topology.clab.yml --cleanup
 
 golden:
-	@for n in $(ROUTERS); do \
-	  echo "golden: $$n frr-reload"; \
-	  $(DOCKER) exec clab-$(LAB)-$$n /usr/lib/frr/frr-reload.py --reload /golden/frr.conf >/dev/null || exit 1; \
-	done
-	@for n in $(NODES); do \
-	  echo "golden: $$n setup.sh"; \
-	  $(DOCKER) exec clab-$(LAB)-$$n sh /setup.sh || exit 1; \
-	done
-	@$(MAKE) --no-print-directory converge
+	LAB=$(LAB) $(LAB_RUN)/scripts/golden.sh
 
 converge:
 	LAB=$(LAB) $(LAB_RUN)/scripts/converge.sh
