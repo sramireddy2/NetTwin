@@ -65,8 +65,8 @@ serve:
 	REPO=$(abspath $(HERE)/..) $(HERE)/scripts/serve.sh
 
 stop-serve:
-	-pkill -f twinlab-server
-	-pkill -f netverify-server
+	-pkill -f "[t]winlab-server"
+	-pkill -f "[n]etverify-server"
 
 test-lab:
 	cd $(HERE)/.. && NETTWIN_LAB=1 uv run pytest tests/lab -q
