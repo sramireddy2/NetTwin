@@ -9,6 +9,7 @@ inject:
     - kind: frr_lines
       lines:
         - interface eth2
+        - " no ip ospf area 0.0.0.0"
         - " ip ospf area 0.0.0.1"
 ground_truth:
   node: r3
