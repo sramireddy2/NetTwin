@@ -45,7 +45,10 @@ branch was deleted, so it was re-opened as #7):
   verifier scoped to netverify), `.claude/skills/diagnose` and `diagnose-solo`,
   `netbench.roles` (frontmatter parser, reused by M10), `ManualRunner` + `netbench run
   --runner manual` to score an interactive run through the new `/admin/exports/{id}` route,
-  `docs/diagnose.md` runbook. Manual runner proven live with a scripted stand-in (001, RVC).
+  `docs/diagnose.md` runbook. Manual runner proven live with a scripted stand-in (001, RVC),
+  then the real team closed scenario 001 interactively: RVC, minimal, 4 min 4 s from S0 to
+  export, verifier isolated; Claude Code desktop did not surface the elicitation, so the
+  export went through the pending + `nettwin approve` path (`results/interactive/runs.jsonl`).
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -120,13 +123,11 @@ golden scripts flush route caches; snapshot ids exclude routes (derived) and bri
 
 ## Next milestones
 
-- M7 remaining: one real interactive run. Open Claude Code in the repo (a session opened
-  elsewhere does not load `.mcp.json`; `/mcp` must list twinlab and netverify), start the
-  servers WITHOUT NETTWIN_BENCH (`make -C lab serve`) so the export approval is an
-  elicitation dialog, run `uv run netbench run --runner manual --scenarios 001 --matrix
-  interactive` in another window, then `/diagnose <symptom>` in Claude Code, approve, check
-  that the verifier subagent transcript holds only S0/S1/policy/symptom, record the score in
-  lab-notes, tune the role prompts if needed, merge the PR.
+- M7 done once PR #9 is merged. Lessons: a Claude Code session must be opened in the repo for
+  `.mcp.json` to load, and if the servers are down at session start the user reconnects them
+  with `/mcp` (the reconnect tool only handles claude.ai connectors); the desktop app did not
+  present MCP elicitation, so approvals go through `nettwin approve <id>`; the harness's
+  manual runner waits 3 min for that decision and scores a pending bundle as exported.
 - M8 tier B/C scenarios 015–020 (VLAN access/trunk/subinterface tag; nft ACL order, NAT,
   proto-89 filter) plus two-fault and no-fault control.
 - M9 `runners/claude_cli.py`: `claude -p "/diagnose <symptom>" --output-format stream-json

@@ -48,7 +48,7 @@ flowchart TB
 
 ## Status
 
-Lab, both MCP servers, the export gate and the NetBench harness are in and verified against the live twin (the scripted fake agent scores 100 % on the 14 tier-A scenarios; see [docs/lab-notes.md](docs/lab-notes.md)). The Claude Code agent team and the `/diagnose` and `/diagnose-solo` skills are wired up; [docs/diagnose.md](docs/diagnose.md) explains how to run and score an incident interactively. Next: tier B/C scenarios, the headless Claude runner and the local-model baseline.
+Lab, both MCP servers, the export gate and the NetBench harness are in and verified against the live twin (the scripted fake agent scores 100 % on the 14 tier-A scenarios; see [docs/lab-notes.md](docs/lab-notes.md)). The Claude Code agent team and the `/diagnose` and `/diagnose-solo` skills are wired up and have closed a real incident end to end (three parallel investigators, change agent, isolated verifier, export gate); [docs/diagnose.md](docs/diagnose.md) explains how to run and score an incident interactively. One practical note: the Claude Code desktop app did not surface twinlab's MCP elicitation, so the export stayed pending until the operator approved it with `nettwin approve`; the gate holds either way. Next: tier B/C scenarios, the headless Claude runner and the local-model baseline.
 
 See [docs/design.md](docs/design.md) for the architecture, parts, contracts, scenarios, and tradeoffs, and [docs/roadmap.md](docs/roadmap.md) for the milestone plan.
 

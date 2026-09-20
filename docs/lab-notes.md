@@ -229,5 +229,27 @@ once the operator has decided. Live check (2026-09-20), servers in bench mode, w
 scripted stand-in replaying the expected fix over HTTP in place of the Claude Code session:
 scenario 001 was injected 50 s after start (baseline, reset, inject, convergence), the export
 `4ac8ba67607e` was picked up within one poll and scored `RVC` (36 s from injection to score),
-and the twin was rolled back to golden afterwards. The real interactive run with Claude Code
-subagents is still to be done; `docs/diagnose.md` has the steps.
+and the twin was rolled back to golden afterwards.
+
+Interactive run with the real team (2026-09-20, Claude Code desktop session in the repo,
+model inherited by every role, servers without bench mode), scored by `netbench run --runner
+manual --name claude-team --scenarios 001 --matrix interactive` and recorded in
+`results/interactive/runs.jsonl`:
+
+| Config | Runs | Root cause | Verified fix | No collateral | Minimal | Errors |
+|---|---|---|---|---|---|---|
+| claude-team | 1 | 100% | 100% | 100% | 100% | 0 |
+
+What happened, from the transcript: the commander read `lab://topology` and took S0; the
+three investigators ran in parallel (L2 in 64 s with 15 show commands, L3 in 42 s with 12,
+policy in 52 s with 9) and all three named r3 `ospf.area` with evidence from both ends of the
+link, the policy investigator ruling out every filter and BGP policy explicitly; the change
+agent confirmed the state, applied one `frr_lines` op on r3 and saw the adjacency Full on
+both ends within 6 s, and its after snapshot S1 was byte-identical to the golden baseline;
+the verifier, given only S0, S1, the policy path and the symptom, passed all 20 rules with
+the attestation bound to S1 and confirmed nothing else was in its prompt. From S0 to the
+export bundle took 4 min 4 s (the harness's 474 s includes the wait before the operator
+started). The Claude Code desktop app did not surface the MCP elicitation, so `export_change`
+returned `pending` and the operator decides with `nettwin approve d51b24a0865e`; the score
+counts a pending bundle as exported. The verifier subagent's transcript contains only its
+prompt and three netverify calls (`wait_converged`, `intent_check`, `route_diff`).

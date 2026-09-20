@@ -56,11 +56,20 @@ baseline. Both skills accept `--no-verifier`, which skips verification and never
 
    The commander snapshots, launches the three investigators in parallel, picks a root
    cause, hands it to the change agent, then launches the verifier with only the two
-   snapshot ids. When the verifier passes, `export_change` raises the approval dialog; answer
-   it. Declining leaves nothing exported.
+   snapshot ids. When the verifier passes, `export_change` asks for approval. A client that
+   supports MCP elicitation shows a dialog; the Claude Code desktop app did not surface one
+   in our runs, in which case twinlab leaves the bundle pending and tells the agent so.
+   Either way the decision is yours: answer the dialog, or run
 
-5. The harness in window A notices the bundle, waits for your decision, scores the run and
-   rolls the twin back to golden. Then:
+   ```bash
+   uv run nettwin approve <export_id>
+   ```
+
+   Declining, or never approving, leaves nothing exported.
+
+5. The harness in window A notices the bundle, waits up to three minutes for your decision
+   (a pending bundle still counts as exported for the score), scores the run and rolls the
+   twin back to golden. Then:
 
    ```bash
    uv run netbench report --matrix interactive
