@@ -38,7 +38,12 @@ class ExecResult:
 @runtime_checkable
 class Executor(Protocol):
     async def exec(
-        self, node: str, argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT
+        self,
+        node: str,
+        argv: Sequence[str],
+        *,
+        timeout: float = DEFAULT_TIMEOUT,
+        stdin: bytes | None = None,
     ) -> ExecResult: ...
 
 
@@ -73,21 +78,30 @@ class DockerExecutor:
     def container(self, node: str) -> str:
         return f"{self.prefix}-{self.lab}-{validate_node(node)}"
 
-    def command(self, node: str, argv: Sequence[str]) -> list[str]:
+    def command(self, node: str, argv: Sequence[str], *, with_stdin: bool = False) -> list[str]:
         if not argv:
             raise ValueError("argv must not be empty")
-        return [self.docker, "exec", self.container(node), *argv]
+        flags = ["-i"] if with_stdin else []
+        return [self.docker, "exec", *flags, self.container(node), *argv]
 
     async def exec(
-        self, node: str, argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT
+        self,
+        node: str,
+        argv: Sequence[str],
+        *,
+        timeout: float = DEFAULT_TIMEOUT,
+        stdin: bytes | None = None,
     ) -> ExecResult:
-        cmd = self.command(node, argv)
+        cmd = self.command(node, argv, with_stdin=stdin is not None)
         started = time.monotonic()
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *cmd,
+            stdin=asyncio.subprocess.PIPE if stdin is not None else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout)
+            out, err = await asyncio.wait_for(proc.communicate(stdin), timeout)
         except TimeoutError:
             proc.kill()
             await proc.wait()
@@ -125,6 +139,7 @@ class FakeExecutor:
 
     def __init__(self, *, output_cap: int = DEFAULT_OUTPUT_CAP) -> None:
         self.calls: list[tuple[str, tuple[str, ...]]] = []
+        self.stdin_log: list[tuple[str, tuple[str, ...], bytes]] = []
         self.output_cap = output_cap
         self._exact: dict[tuple[str, tuple[str, ...]], tuple[str, str, int]] = {}
         self._prefix: list[tuple[str, tuple[str, ...], tuple[str, str, int]]] = []
@@ -172,11 +187,18 @@ class FakeExecutor:
         return "", f"FakeExecutor: no script for {node} {' '.join(argv)}", 127
 
     async def exec(
-        self, node: str, argv: Sequence[str], *, timeout: float = DEFAULT_TIMEOUT
+        self,
+        node: str,
+        argv: Sequence[str],
+        *,
+        timeout: float = DEFAULT_TIMEOUT,
+        stdin: bytes | None = None,
     ) -> ExecResult:
         validate_node(node)
         key = tuple(argv)
         self.calls.append((node, key))
+        if stdin is not None:
+            self.stdin_log.append((node, key, stdin))
         stdout, stderr, rc = self._lookup(node, key)
         stdout, truncated = cap_output(stdout, self.output_cap)
         return ExecResult(

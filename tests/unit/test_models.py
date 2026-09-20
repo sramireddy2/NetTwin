@@ -18,6 +18,14 @@ def test_snapshot_id_is_deterministic_and_order_independent() -> None:
     assert snap.short_id == snap.id[:12]
 
 
+def test_snapshot_id_ignores_routes_but_diff_reports_configured_fields() -> None:
+    base = {"r1": NodeState(running_config="x", routes=[{"dst": "a"}])}
+    reconverged = {"r1": NodeState(running_config="x", routes=[{"dst": "b"}])}
+    assert Snapshot.compute_id(base) == Snapshot.compute_id(reconverged)
+    changed = Snapshot.build("lab", {"r1": NodeState(running_config="y", nft="t")})
+    assert Snapshot.build("lab", base).diff(changed) == {"r1": ["running_config", "nft"]}
+
+
 def test_verification_report_failed_rules_is_serialised() -> None:
     report = VerificationReport(
         passed=False,

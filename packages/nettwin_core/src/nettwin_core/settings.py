@@ -19,6 +19,7 @@ class Settings:
     netverify_port: int
     bench: bool
     admin_token: str | None
+    topology_path: Path
 
     @property
     def snapshots_dir(self) -> Path:
@@ -47,6 +48,7 @@ class Settings:
             netverify_port=int(env.get("NETTWIN_NETVERIFY_PORT", "8002")),
             bench=env.get("NETTWIN_BENCH", "").strip().lower() in TRUE_VALUES,
             admin_token=env.get("NETTWIN_ADMIN_TOKEN") or None,
+            topology_path=Path(env.get("NETTWIN_TOPOLOGY", "lab/topology.clab.yml")),
         )
 
     def ensure_dirs(self) -> None:

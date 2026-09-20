@@ -92,6 +92,12 @@ def lab_check() -> None:
     _run_make("check")
 
 
+@lab_app.command("test")
+def lab_test() -> None:
+    """Run the live-lab pytest suite inside WSL."""
+    _run_make("test-lab")
+
+
 @lab_app.command("inject")
 def lab_inject(scenario: str) -> None:
     """Inject a NetBench fault scenario through the twinlab admin route (milestone M3)."""
@@ -101,9 +107,17 @@ def lab_inject(scenario: str) -> None:
 
 @app.command()
 def serve() -> None:
-    """Start the twinlab and netverify MCP servers inside WSL (milestone M2)."""
-    typer.echo("serve: available from milestone M2", err=True)
-    raise typer.Exit(2)
+    """Start the MCP servers inside WSL and stay attached (Ctrl-C stops them).
+
+    Staying attached also keeps the WSL2 VM, and with it the containerlab links, alive.
+    """
+    _run_make("serve")
+
+
+@app.command("stop-serve")
+def stop_serve() -> None:
+    """Stop the MCP servers inside WSL."""
+    _run_make("stop-serve")
 
 
 @app.command()
