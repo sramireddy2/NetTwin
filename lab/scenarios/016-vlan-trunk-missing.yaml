@@ -1,0 +1,27 @@
+id: 016-vlan-trunk-missing
+title: Guest VLAN dropped from the switch uplink trunk
+tier: B
+layer: L2
+symptom: >
+  NOC ticket: guest users on VLAN 20 cannot reach the internet, or even their gateway, since
+  a maintenance window on the access switch. Corporate users are unaffected and the gateway
+  router reports no change.
+inject:
+  sw1:
+    - kind: bridge_vlan
+      action: del
+      dev: eth1
+      vlan_id: 20
+ground_truth:
+  node: sw1
+  layer: L2
+  component: vlan.trunk
+  summary: VLAN 20 was removed from sw1 eth1, the trunk toward r3, so tagged guest frames never reach their gateway
+expected_fix:
+  sw1:
+    - kind: bridge_vlan
+      action: add
+      dev: eth1
+      vlan_id: 20
+expected_failed_rules: [guest-to-inet]
+probe: {node: h20, cmd: ping -c 1 -W 1 10.0.20.1, expect: fail}

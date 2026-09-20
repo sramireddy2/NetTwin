@@ -1,0 +1,39 @@
+id: 015-vlan-access-port
+title: Corporate access port retagged to an unused VLAN
+tier: B
+layer: L2
+symptom: >
+  NOC ticket: every corporate user on VLAN 10 lost connectivity at once, right after the
+  access switch was "tidied up". Guest users on VLAN 20 are fine. The users' link lights are
+  on and their addresses did not change.
+inject:
+  sw1:
+    - kind: bridge_vlan
+      action: del
+      dev: eth2
+      vlan_id: 10
+    - kind: bridge_vlan
+      action: add
+      dev: eth2
+      vlan_id: 30
+      pvid: true
+      untagged: true
+ground_truth:
+  node: sw1
+  layer: L2
+  component: vlan.access
+  summary: sw1 eth2, the access port for h10, is untagged in VLAN 30 instead of VLAN 10, so corporate frames enter a VLAN the trunk never carries
+expected_fix:
+  sw1:
+    - kind: bridge_vlan
+      action: del
+      dev: eth2
+      vlan_id: 30
+    - kind: bridge_vlan
+      action: add
+      dev: eth2
+      vlan_id: 10
+      pvid: true
+      untagged: true
+expected_failed_rules: [corp-to-srv, corp-to-srv-mtu, corp-to-inet]
+probe: {node: h10, cmd: ping -c 1 -W 1 10.0.10.1, expect: fail}

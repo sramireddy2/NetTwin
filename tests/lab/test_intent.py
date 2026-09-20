@@ -47,7 +47,8 @@ async def test_scenario_fails_exactly_its_rules(
         result = await twin.rollback(golden.id)
     failed = set(report.failed_rules) - {"converged"}
     assert failed == set(scenario.expected_failed_rules), report.rules
-    assert report.attestation is None
+    # A planted fault must not be attested; the no-fault control must be.
+    assert (report.attestation is None) == bool(scenario.expected_failed_rules)
     assert result["matches_target"] is True
     after = await verifier.wait_converged(timeout=60)
     assert after.converged, after

@@ -1,0 +1,30 @@
+id: 019-nft-nat-missing
+title: Guest NAT rule removed from the internet edge
+tier: C
+layer: policy
+symptom: >
+  NOC ticket: guest users on VLAN 20 cannot reach the internet although they reach their
+  gateway and the corporate side of the network. Corporate users reach the internet
+  normally and the ISP reports no change on their side.
+inject:
+  r4:
+    - kind: nft_rule
+      action: flush_chain
+      family: ip
+      table: nat
+      chain: postrouting
+ground_truth:
+  node: r4
+  layer: policy
+  component: nft.nat
+  summary: the masquerade rule for 10.0.20.0/24 toward the ISP is gone from r4's nat postrouting chain, so guest packets leave with private sources the ISP cannot route back
+expected_fix:
+  r4:
+    - kind: nft_rule
+      action: add
+      family: ip
+      table: nat
+      chain: postrouting
+      rule: oifname eth3 ip saddr 10.0.20.0/24 masquerade
+expected_failed_rules: [guest-to-inet]
+probe: {node: h20, cmd: ping -c 1 -W 1 198.51.100.10, expect: fail}

@@ -1,0 +1,46 @@
+id: 021-two-faults-mtu-and-bgp
+title: Two unrelated faults at once, an MTU mismatch in the core and a missing BGP network
+tier: stretch
+layer: L3
+symptom: >
+  NOC ticket, two incidents merged into one: (1) the r1-r2 OSPF adjacency has been cycling
+  through ExStart and Exchange since a NIC driver update on r2, although pings across the
+  link work; (2) external partners cannot reach the file server 10.0.40.10 and the ISP says
+  one of our prefixes disappeared. Internal users still reach the server.
+inject:
+  r2:
+    - kind: set_mtu
+      iface: eth1
+      mtu: 1400
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " address-family ipv4 unicast"
+        - "  no network 10.0.40.0/24"
+ground_truth:
+  node: r2
+  layer: L2
+  component: link.mtu
+  summary: r2 eth1 MTU is 1400 while r1 eth1 is 1500, so database description packets are refused
+extra_causes:
+  - node: r4
+    layer: L3
+    component: bgp.network
+    summary: the 'network 10.0.40.0/24' statement was removed from r4's BGP address family
+expected_fix:
+  r2:
+    - kind: set_mtu
+      iface: eth1
+      mtu: 1500
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " address-family ipv4 unicast"
+        - "  network 10.0.40.0/24"
+expected_failed_rules: [ospf-r1-eth1, ospf-r2-eth1, inet-to-srv]
+probe: {node: inet, cmd: ping -c 1 -W 1 10.0.40.10, expect: fail}
+notes: >
+  Scored like any scenario: the reported root cause counts if it matches either planted
+  fault, a verified fix has to remove both, and minimal allows ops on both nodes.

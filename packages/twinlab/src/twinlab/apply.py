@@ -7,10 +7,14 @@ from collections.abc import Sequence
 
 from nettwin_core.executor import ExecResult, Executor
 from nettwin_core.models import NodeState
-from nettwin_core.ops import Op, render
+from nettwin_core.ops import NftRule, Op, render
 from twinlab.snapshot import addresses, bridge_vlans, mtus, vlan_links
 
 APPLY_TIMEOUT = 30.0
+NFT_LIST_TIMEOUT = 10.0
+
+#: nft prints protocol numbers it can resolve by name; compare both sides numerically.
+_PROTO_ALIASES = {"icmp": "1", "tcp": "6", "udp": "17", "ospf": "89"}
 
 
 class ApplyError(RuntimeError):
@@ -26,10 +30,35 @@ def frr_errors(output: str) -> list[str]:
     return [ln.strip() for ln in output.splitlines() if ln.strip().startswith("%")]
 
 
+def normalise_nft_rule(text: str) -> str:
+    """Canonical form for comparing a rule as written with a rule as nft prints it."""
+    body = text.split("#", 1)[0]
+    tokens = [_PROTO_ALIASES.get(t.strip('"'), t.strip('"')) for t in body.split()]
+    return " ".join(tokens)
+
+
+async def resolve_nft_handle(executor: Executor, node: str, op: NftRule) -> int:
+    """Find the handle of the rule whose text matches `op.rule` in its chain."""
+    argv = ["nft", "-a", "list", "chain", op.family, op.table, op.chain]
+    res = await executor.exec(node, argv, timeout=NFT_LIST_TIMEOUT)
+    if not res.ok:
+        raise ApplyError(node, argv, res.stderr.strip() or res.stdout.strip() or "exit")
+    wanted = normalise_nft_rule(op.rule or "")
+    for line in res.stdout.splitlines():
+        body, sep, handle = line.rpartition("# handle")
+        if sep and normalise_nft_rule(body) == wanted and handle.strip().isdigit():
+            return int(handle.strip())
+    raise ApplyError(
+        node, argv, f"no rule matching {op.rule!r} in {op.family} {op.table} {op.chain}"
+    )
+
+
 async def apply_ops(executor: Executor, node: str, ops: Sequence[Op]) -> list[ExecResult]:
     """Run every op's argv in order; stop at the first failure."""
     results: list[ExecResult] = []
     for op in ops:
+        if isinstance(op, NftRule) and op.action == "delete" and op.handle is None:
+            op = op.model_copy(update={"handle": await resolve_nft_handle(executor, node, op)})
         for argv in render(op):
             res = await executor.exec(node, argv, timeout=APPLY_TIMEOUT)
             results.append(res)

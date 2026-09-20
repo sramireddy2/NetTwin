@@ -69,6 +69,11 @@ async def test_scenario_symptom_and_rollback(
 ) -> None:
     await _converged(executor)
     golden = await app.snapshot()
+    if not scenario.inject:
+        # Control scenario: injecting it must leave the twin untouched.
+        injected = await app.inject(scenario.id)
+        assert injected["after"] == golden.id, "control scenario changed the twin"
+        return
     assert scenario.probe is not None
     try:
         injected = await app.inject(scenario.id)

@@ -78,8 +78,10 @@ class FakeAgentRunner:
     async def run(self, ctx: RunContext) -> RunOutput:
         scenario = self.catalog[ctx.scenario_id]
         gt = scenario.ground_truth
-        root_cause = RootCause(
-            node=gt.node, layer=gt.layer, component=gt.component, summary=gt.summary
+        root_cause = (
+            RootCause(node=gt.node, layer=gt.layer, component=gt.component, summary=gt.summary)
+            if gt is not None
+            else None  # control scenario: the honest answer is "no fault"
         )
 
         await ctx.twin.read_resource("lab://topology")
@@ -96,7 +98,7 @@ class FakeAgentRunner:
                 {
                     "node": node,
                     "ops": [op.model_dump() for op in ops],
-                    "rationale": f"fix {gt.component} on {node}",
+                    "rationale": f"fix {gt.component if gt else 'nothing'} on {node}",
                 },
             )
             change_ids.append(applied.require()["change_id"])
@@ -107,13 +109,13 @@ class FakeAgentRunner:
             await ctx.verify.call("wait_converged", {"timeout": 60})
             report = await ctx.verify.call("intent_check", timeout=300)
             verification = VerificationReport.model_validate(report.require())
-            if verification.passed:
+            if verification.passed and change_ids:
                 exported = await ctx.twin.call(
                     "export_change",
                     {
                         "change_ids": change_ids,
                         "verification": verification.model_dump(mode="json"),
-                        "root_cause": root_cause.model_dump(),
+                        "root_cause": root_cause.model_dump() if root_cause else None,
                         "summary": scenario.title,
                     },
                 )
