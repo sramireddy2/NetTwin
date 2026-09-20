@@ -126,10 +126,15 @@ def stop_serve() -> None:
 
 
 @app.command()
-def approve(change_id: str) -> None:
-    """Approve an export outside of MCP elicitation (milestone M5)."""
-    typer.echo(f"approve {change_id}: available from milestone M5", err=True)
-    raise typer.Exit(2)
+def approve(export_id: str) -> None:
+    """Approve a pending export when the MCP client could not present the elicitation."""
+    _run_make("approve", [f"ID={export_id}"])
+
+
+@app.command()
+def exports() -> None:
+    """List export bundles and their status."""
+    _run_make("exports")
 
 
 if __name__ == "__main__":

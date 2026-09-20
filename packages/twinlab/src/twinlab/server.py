@@ -3,6 +3,8 @@
 Tools are thin wrappers over :class:`twinlab.app.TwinLab`. Anything an agent can do to the
 twin goes through here, is validated by pydantic, and is executed as argv, never a shell.
 Fault injection and golden reset are admin HTTP routes with a bearer token, not tools.
+Exporting a change requires netverify's signed attestation and a human answer to an MCP
+elicitation raised by this server, so the agent cannot talk its way past the gate.
 """
 
 from __future__ import annotations
@@ -11,19 +13,20 @@ import json
 import logging
 from datetime import datetime
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
-from nettwin_core.models import ChangeResult
+from nettwin_core.models import ChangeResult, RootCause, VerificationReport
 from nettwin_core.ops import Op
 from nettwin_core.settings import Settings
 from twinlab.admin import load_or_create_token, register_admin_routes
 from twinlab.allowlist import EXAMPLES, CommandNotAllowed
 from twinlab.app import TwinLab, UnknownNode
 from twinlab.apply import ApplyError
+from twinlab.export import Approval, ExportError, ExportResult, preview
 from twinlab.snapshot import SnapshotError
 
 log = logging.getLogger("twinlab")
@@ -34,15 +37,18 @@ switch and Linux hosts). Read the lab://topology resource first to learn node na
 and links. Use run_show_command for read-only inspection on any node. Take a snapshot before
 changing anything. Change the twin only through apply_config with typed operations; every
 apply is bracketed by snapshots and returns the resulting diff. Roll back to a snapshot if a
-change does not help. Nothing here touches a production device.
+change does not help. When netverify's intent_check passes after your change, call
+export_change with the change ids, the verification report and the root cause; the server
+asks the operator for approval. Nothing here touches a production device.
 """
 
 SHOW_DESCRIPTION = (
     "Run a read-only command on one node of the twin and return its output. FRR commands "
     "start with 'show' and run in vtysh (show ip route, show ip ospf neighbor, show bgp "
     "summary, show running-config, ...). Kernel commands are limited to ip/bridge/nft reads, "
-    "sysctl net.ipv4.*, ping (-c required, max 5) and traceroute. Prefer filtered forms such "
-    "as 'show ip route 10.0.40.0/24' to keep output short. Examples: " + "; ".join(EXAMPLES)
+    "sysctl net.ipv4.*, ping (-c required, max 5), traceroute and nc -z. Prefer filtered "
+    "forms such as 'show ip route 10.0.40.0/24' to keep output short. Examples: "
+    + "; ".join(EXAMPLES)
 )
 
 APPLY_DESCRIPTION = (
@@ -55,6 +61,15 @@ APPLY_DESCRIPTION = (
     "add|insert|delete|flush_chain, family, table, chain, rule?, handle?, index?}. The server "
     "snapshots before and after, rolls back automatically if any op fails, and returns the "
     "change id plus the running-config and kernel diff it produced."
+)
+
+EXPORT_DESCRIPTION = (
+    "Export verified changes as a production-ready bundle (diff, root cause, verification "
+    "evidence). Requires the change ids in order, the VerificationReport returned by "
+    "netverify's intent_check after the last change (its signed attestation is checked), "
+    "and the RootCause. The server then asks the human operator for approval through MCP "
+    "elicitation; if the client cannot elicit, the export stays pending until "
+    "`nettwin approve <export_id>` is run. The agent cannot approve."
 )
 
 
@@ -193,6 +208,98 @@ def build_server(app: TwinLab, *, admin_token: str | None = None) -> MCPServer:
     async def list_changes() -> ChangeList:
         return ChangeList(changes=app.changes.ids())
 
+    @server.tool(
+        name="export_change",
+        description=EXPORT_DESCRIPTION,
+        annotations=ToolAnnotations(open_world_hint=True),
+    )
+    async def export_change(
+        change_ids: list[str],
+        verification: VerificationReport,
+        root_cause: RootCause,
+        summary: str,
+        ctx: Context,
+    ) -> ExportResult:
+        try:
+            bundle = app.prepare_export(change_ids, verification, root_cause, summary)
+        except KeyError as exc:
+            raise ToolError(f"unknown change: {exc}") from exc
+        except ExportError as exc:
+            raise ToolError(str(exc)) from exc
+        export_id = bundle.export_id
+        path = str(app.exports.path(export_id))
+
+        if app.settings.bench:
+            app.decide_export(export_id, approved=True, decided_by="bench-auto")
+            return ExportResult(
+                export_id=export_id,
+                status="approved",
+                path=path,
+                decided_by="bench-auto",
+                message="benchmark mode: auto-approved without elicitation",
+            )
+
+        try:
+            answer = await ctx.elicit(preview(bundle), Approval)
+        except Exception as exc:  # noqa: BLE001 - any failure to elicit leaves it pending
+            log.warning("export %s: elicitation unavailable (%s); left pending", export_id, exc)
+            return ExportResult(
+                export_id=export_id,
+                status="pending",
+                path=path,
+                message=(
+                    "the client could not present an approval prompt; the export is pending. "
+                    f"An operator can approve it with: nettwin approve {export_id}"
+                ),
+            )
+        approved = (
+            answer.action == "accept"
+            and bool(getattr(answer, "data", None))
+            and answer.data.approve
+        )
+        note = answer.data.note if approved else ""
+        decided = app.decide_export(export_id, approved=approved, decided_by="operator", note=note)
+        return ExportResult(
+            export_id=export_id,
+            status=decided.status,
+            path=path,
+            decided_by=decided.decided_by,
+            message="operator approved; bundle written"
+            if approved
+            else f"operator {answer.action}ed the export; nothing was written",
+        )
+
+    @server.prompt(
+        name="diagnose",
+        description="Diagnose a symptom in the twin, fix it, verify, and export the change.",
+    )
+    def diagnose(symptom: str) -> str:
+        return (
+            f"Symptom reported by the NOC: {symptom}\n\n"
+            "Work only inside the twin. Steps: (1) read lab://topology; (2) call snapshot and "
+            "keep its id as S0; (3) investigate with run_show_command across layers (L2: "
+            "links, MTU, VLANs, addresses; L3: OSPF adjacencies, routes, BGP; policy: nftables, "
+            "route-maps, prefix-lists) and state the root cause as node + component with "
+            "evidence; (4) apply the minimal fix with apply_config and note the change id; "
+            "(5) on netverify call wait_converged then intent_check; if it fails, rollback to "
+            "S0 and rethink; (6) when it passes, call export_change with the change ids, the "
+            "verification report and the root cause, then report what you did."
+        )
+
+    @server.prompt(
+        name="propose-change",
+        description="Turn a known root cause into a minimal, verified, exportable change.",
+    )
+    def propose_change(root_cause: str) -> str:
+        return (
+            f"Root cause: {root_cause}\n\n"
+            "Take a snapshot (S0), then apply the smallest apply_config change that removes "
+            "the cause without touching anything else. Verify with netverify intent_check "
+            "after waiting for convergence. If any rule fails, rollback to S0 and try a "
+            "different minimal change. When it passes, export_change with the verification "
+            "report and a one-paragraph summary of what changed and why."
+        )
+
     if admin_token:
         register_admin_routes(server, app, admin_token)
     return server
@@ -212,12 +319,13 @@ def main() -> None:
     app = TwinLab.from_settings(settings)
     token = settings.admin_token or load_or_create_token(settings.admin_token_path)
     log.info(
-        "twinlab: lab=%s topology=%s nodes=%d state=%s port=%d admin_token=%s",
+        "twinlab: lab=%s topology=%s nodes=%d state=%s port=%d bench=%s admin_token=%s",
         settings.lab_name,
         settings.topology_path,
         len(app.topology.nodes),
         settings.state_dir,
         settings.twinlab_port,
+        settings.bench,
         settings.admin_token_path,
     )
     build_server(app, admin_token=token).run(
