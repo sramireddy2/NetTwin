@@ -1,0 +1,27 @@
+id: 014-bgp-wrong-remote-as
+title: eBGP neighbour configured with the wrong remote AS
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: internet access is down for the whole site and partners cannot reach the
+  file server. The link to the ISP is up and pings, but the ISP says our BGP session keeps
+  resetting during OPEN.
+inject:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " neighbor 203.0.113.2 remote-as 65002"
+ground_truth:
+  node: r4
+  layer: L3
+  component: bgp.remote_as
+  summary: r4's neighbour statement says remote-as 65002 but the ISP is AS 65000, so the session never establishes
+expected_fix:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router bgp 65001
+        - " neighbor 203.0.113.2 remote-as 65000"
+expected_failed_rules: [ebgp-r4-isp, corp-to-inet, guest-to-inet, inet-to-srv]
+probe: {node: r4, cmd: show bgp neighbors 203.0.113.2, absent: "= Established"}

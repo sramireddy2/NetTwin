@@ -60,13 +60,16 @@ class ChangeProposal(BaseModel):
 
 
 class ChangeResult(BaseModel):
-    """What twinlab actually applied, with the server-computed diff."""
+    """What twinlab actually applied to one node, with the server-computed diff."""
 
     change_id: str
+    node: str
     before_snapshot_id: str
     after_snapshot_id: str
     diff: str
-    ops: dict[str, list[Op]]
+    ops: list[Op]
+    rationale: str = ""
+    applied_at: datetime | None = None
 
 
 class NodeState(BaseModel):

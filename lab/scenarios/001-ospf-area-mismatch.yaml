@@ -1,0 +1,29 @@
+id: 001-ospf-area-mismatch
+title: OSPF area mismatch on the r3 uplink to r1
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: monitoring shows r1 lost its OSPF neighbour on eth2 (toward r3) about ten
+  minutes ago. Users on VLAN 10 can still reach the file server, but the distribution layer
+  is now single-homed through r2. Find the cause and restore the redundant path.
+inject:
+  r3:
+    - kind: frr_lines
+      lines:
+        - interface eth1
+        - " no ip ospf area 0.0.0.1"
+        - " ip ospf area 0.0.0.0"
+ground_truth:
+  node: r3
+  layer: L3
+  component: ospf.area
+  summary: r3 eth1 was moved to area 0 while r1 eth2 (its peer) stays in area 1
+expected_fix:
+  r3:
+    - kind: frr_lines
+      lines:
+        - interface eth1
+        - " no ip ospf area 0.0.0.0"
+        - " ip ospf area 0.0.0.1"
+expected_failed_rules: [ospf-r1-eth2, ospf-r3-eth1]
+probe: {node: r1, cmd: show ip ospf neighbor, absent: "10.255.0.3"}

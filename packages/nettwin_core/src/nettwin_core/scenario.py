@@ -26,6 +26,16 @@ class GroundTruth(BaseModel):
     summary: str
 
 
+class Probe(BaseModel):
+    """The quickest way to see the symptom: one allowlisted show command and what to expect."""
+
+    node: str
+    cmd: str
+    expect: Literal["ok", "fail"] = "ok"
+    contains: str | None = None
+    absent: str | None = None
+
+
 class Scenario(BaseModel):
     id: str = Field(pattern=SCENARIO_ID_PATTERN)
     title: str
@@ -36,6 +46,7 @@ class Scenario(BaseModel):
     ground_truth: GroundTruth
     expected_fix: dict[str, list[Op]]
     expected_failed_rules: list[str] = Field(default_factory=list)
+    probe: Probe | None = None
     policy: str = "lab/policy/intent.yaml"
     notes: str = ""
 

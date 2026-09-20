@@ -1,0 +1,28 @@
+id: 003-ospf-timer-mismatch
+title: OSPF hello and dead timers changed on one side of the core link
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: the r1-r2 core adjacency is flapping and now stays down. Both interfaces are
+  up and pass pings. Someone "tuned timers for stability" on the core last night.
+inject:
+  r1:
+    - kind: frr_lines
+      lines:
+        - interface eth1
+        - " ip ospf hello-interval 5"
+        - " ip ospf dead-interval 15"
+ground_truth:
+  node: r1
+  layer: L3
+  component: ospf.timers
+  summary: r1 eth1 uses hello 5 / dead 15 while r2 eth1 still uses 1 / 3, so hellos are rejected
+expected_fix:
+  r1:
+    - kind: frr_lines
+      lines:
+        - interface eth1
+        - " ip ospf hello-interval 1"
+        - " ip ospf dead-interval 3"
+expected_failed_rules: [ospf-r1-eth1, ospf-r2-eth1]
+probe: {node: r2, cmd: show ip ospf neighbor, absent: "10.255.0.1"}

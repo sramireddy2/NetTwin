@@ -1,0 +1,27 @@
+id: 007-bgp-route-leak
+title: Guest VLAN and infrastructure prefixes leaked to the ISP
+tier: A
+layer: policy
+symptom: >
+  NOC ticket: the ISP's abuse desk reports we are announcing internal prefixes, including
+  the guest network, and a security scan from the internet reached a guest host directly.
+  Nothing is down.
+inject:
+  r4:
+    - kind: frr_lines
+      lines:
+        - route-map REDIST-OSPF permit 10
+        - " no match ip address prefix-list CORP"
+ground_truth:
+  node: r4
+  layer: policy
+  component: bgp.route_map
+  summary: route-map REDIST-OSPF lost its prefix-list match, so every OSPF route is redistributed to the ISP
+expected_fix:
+  r4:
+    - kind: frr_lines
+      lines:
+        - route-map REDIST-OSPF permit 10
+        - " match ip address prefix-list CORP"
+expected_failed_rules: [no-guest-leak, inet-no-guest]
+probe: {node: isp, cmd: show ip route 10.0.20.0/24, contains: "10.0.20.0/24"}

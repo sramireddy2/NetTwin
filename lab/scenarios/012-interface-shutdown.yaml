@@ -1,0 +1,26 @@
+id: 012-interface-shutdown
+title: Transit interface administratively shut down
+tier: A
+layer: L2
+symptom: >
+  NOC ticket: r3 lost its adjacency to r2 during a change; traffic is now single-homed
+  through r1. The operator says they only "cleaned up an unused interface" on r2.
+inject:
+  r2:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " shutdown"
+ground_truth:
+  node: r2
+  layer: L2
+  component: interface.shutdown
+  summary: r2 eth2 (transit to r3) was administratively shut down
+expected_fix:
+  r2:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " no shutdown"
+expected_failed_rules: [ospf-r2-eth2, ospf-r3-eth2]
+probe: {node: r3, cmd: show ip ospf neighbor, absent: "10.255.0.2"}

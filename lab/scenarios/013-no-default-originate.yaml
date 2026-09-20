@@ -1,0 +1,27 @@
+id: 013-no-default-originate
+title: Default route no longer injected into OSPF
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: the whole site lost internet access and external partners cannot reach the
+  file server. The ISP session on r4 is up and r4 itself can reach the internet. Everything
+  internal works.
+inject:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router ospf
+        - " no default-information originate"
+ground_truth:
+  node: r4
+  layer: L3
+  component: ospf.default_information
+  summary: r4 stopped originating the default route into OSPF, so no internal router has a way out
+expected_fix:
+  r4:
+    - kind: frr_lines
+      lines:
+        - router ospf
+        - " default-information originate"
+expected_failed_rules: [corp-to-inet, guest-to-inet, inet-to-srv]
+probe: {node: h10, cmd: ping -c 1 -W 1 198.51.100.10, expect: fail}

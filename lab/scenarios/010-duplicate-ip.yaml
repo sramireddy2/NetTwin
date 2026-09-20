@@ -1,0 +1,24 @@
+id: 010-duplicate-ip
+title: Duplicate address on the r2-r4 core link
+tier: A
+layer: L2
+symptom: >
+  NOC ticket: r2 shows its OSPF neighbour on eth3 (toward r4) down and the log mentions
+  address conflicts. Traffic between the core and the edge still flows through r1.
+inject:
+  r4:
+    - kind: set_addr
+      iface: eth2
+      address: 10.0.24.2/30
+ground_truth:
+  node: r4
+  layer: L2
+  component: ip.address
+  summary: r4 eth2 was given 10.0.24.2/30, the same address r2 uses on eth3
+expected_fix:
+  r4:
+    - kind: set_addr
+      iface: eth2
+      address: 10.0.24.1/30
+expected_failed_rules: [ospf-r2-eth3, ospf-r4-eth2]
+probe: {node: r2, cmd: show ip ospf neighbor eth3, absent: "Full"}

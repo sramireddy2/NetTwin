@@ -1,0 +1,24 @@
+id: 004-ospf-mtu-mismatch
+title: Interface MTU mismatch keeps the core adjacency stuck
+tier: A
+layer: L2
+symptom: >
+  NOC ticket: after a NIC driver update on r2 the r1-r2 OSPF adjacency never reaches Full.
+  It cycles through ExStart/Exchange forever. Pings across the link work.
+inject:
+  r2:
+    - kind: set_mtu
+      iface: eth1
+      mtu: 1400
+ground_truth:
+  node: r2
+  layer: L2
+  component: link.mtu
+  summary: r2 eth1 MTU is 1400 while r1 eth1 is 1500, so database description packets are refused
+expected_fix:
+  r2:
+    - kind: set_mtu
+      iface: eth1
+      mtu: 1500
+expected_failed_rules: [ospf-r1-eth1, ospf-r2-eth1]
+probe: {node: r1, cmd: show ip ospf neighbor eth1, absent: "Full"}

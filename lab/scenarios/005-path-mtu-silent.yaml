@@ -1,0 +1,25 @@
+id: 005-path-mtu-silent
+title: Server-facing MTU lowered, ping works but transfers stall
+tier: A
+layer: L2
+symptom: >
+  NOC ticket: users on VLAN 10 say file transfers to the file server (10.0.40.10) hang or
+  crawl. Ping to the server is fine and the helpdesk closed the ticket twice as "cannot
+  reproduce". Routing looks normal.
+inject:
+  r2:
+    - kind: set_mtu
+      iface: eth4
+      mtu: 1400
+ground_truth:
+  node: r2
+  layer: L2
+  component: link.mtu
+  summary: r2 eth4 (server subnet) MTU is 1400, so full-size frames from the server are dropped
+expected_fix:
+  r2:
+    - kind: set_mtu
+      iface: eth4
+      mtu: 1500
+expected_failed_rules: [corp-to-srv-mtu]
+probe: {node: h10, cmd: ping -c 1 -W 1 -M do -s 1472 10.0.40.10, expect: fail}

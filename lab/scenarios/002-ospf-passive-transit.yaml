@@ -1,0 +1,27 @@
+id: 002-ospf-passive-transit
+title: Transit interface accidentally made passive
+tier: A
+layer: L3
+symptom: >
+  NOC ticket: r3 reports its OSPF adjacency to r2 went down after a change window. Traffic
+  still flows via r1 but the site has lost one of its two uplinks. No link alarms, the
+  interface is up.
+inject:
+  r2:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " ip ospf passive"
+ground_truth:
+  node: r2
+  layer: L3
+  component: ospf.passive
+  summary: r2 eth2 (transit link to r3) was set passive so no hellos are sent
+expected_fix:
+  r2:
+    - kind: frr_lines
+      lines:
+        - interface eth2
+        - " no ip ospf passive"
+expected_failed_rules: [ospf-r2-eth2, ospf-r3-eth2]
+probe: {node: r3, cmd: show ip ospf neighbor, absent: "10.255.0.2"}

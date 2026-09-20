@@ -148,3 +148,31 @@ table`, `inet` can no longer ping srv, while h10 to srv still works. `make golde
 `tests/lab/test_mtu_veth.py` and the same steps by hand: with r2 eth4 at MTU 1400, a
 1300-byte DF ping from srv to 10.0.40.1 passes (2/2), a 1472-byte one is dropped (0/2),
 and after restoring 1500 the 1472-byte ping passes again. Scenarios 004 and 005 are viable.
+
+## NetBench tier A scenarios
+
+Each scenario in `lab/scenarios/` carries the injected ops, the ground truth, the expected
+minimal fix, the intent rules that should go red, and a one-command probe that shows the
+symptom. `tests/lab/test_scenarios.py` injects every scenario through the admin path, waits
+for the probe to match, rolls back to the pre-injection snapshot and requires a byte-identical
+match before moving on.
+
+| Id | Layer | Root cause (node, component) | Expected red rules |
+|---|---|---|---|
+| 001-ospf-area-mismatch | L3 | r3: `ospf.area` | ospf-r1-eth2, ospf-r3-eth1 |
+| 002-ospf-passive-transit | L3 | r2: `ospf.passive` | ospf-r2-eth2, ospf-r3-eth2 |
+| 003-ospf-timer-mismatch | L3 | r1: `ospf.timers` | ospf-r1-eth1, ospf-r2-eth1 |
+| 004-ospf-mtu-mismatch | L2 | r2: `link.mtu` | ospf-r1-eth1, ospf-r2-eth1 |
+| 005-path-mtu-silent | L2 | r2: `link.mtu` | corp-to-srv-mtu |
+| 006-bgp-missing-network | L3 | r4: `bgp.network` | inet-to-srv |
+| 007-bgp-route-leak | policy | r4: `bgp.route_map` | no-guest-leak, inet-no-guest |
+| 008-bgp-prefix-list-typo | policy | r4: `bgp.prefix_list` | corp-to-inet |
+| 009-static-blackhole | L3 | r4: `static.route` | inet-to-srv |
+| 010-duplicate-ip | L2 | r4: `ip.address` | ospf-r2-eth3, ospf-r4-eth2 |
+| 011-wrong-subnet-mask | L3 | r2: `ip.prefixlen` | corp-to-srv, corp-to-srv-mtu, inet-to-srv |
+| 012-interface-shutdown | L2 | r2: `interface.shutdown` | ospf-r2-eth2, ospf-r3-eth2 |
+| 013-no-default-originate | L3 | r4: `ospf.default_information` | corp-to-inet, guest-to-inet, inet-to-srv |
+| 014-bgp-wrong-remote-as | L3 | r4: `bgp.remote_as` | ebgp-r4-isp, corp-to-inet, guest-to-inet, inet-to-srv |
+
+Lab verification (2026-09-20): all 14 pass in 4 min 13 s total, about 18 s per scenario
+including reconvergence. Every rollback matched the pre-injection snapshot byte for byte.
