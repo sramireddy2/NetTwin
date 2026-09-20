@@ -65,7 +65,8 @@ class _FakeProc:
         self._out, self._err, self.returncode, self._delay = out, err, rc, delay
         self.killed = False
 
-    async def communicate(self) -> tuple[bytes, bytes]:
+    async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:  # noqa: A002
+        self.stdin_received = input
         if self._delay:
             await asyncio.sleep(self._delay)
         return self._out, self._err

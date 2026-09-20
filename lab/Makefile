@@ -11,6 +11,9 @@ ROUTERS := r1 r2 r3 r4 isp
 HOSTS := sw1 h10 h20 srv inet
 NODES := $(ROUTERS) $(HOSTS)
 HERE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+export PATH := $(HOME)/.local/bin:$(PATH)
+export UV_PROJECT_ENVIRONMENT ?= $(HOME)/.venvs/nettwin
+export NETTWIN_STATE_DIR ?= $(HOME)/.nettwin
 
 .PHONY: help images sync deploy up down golden converge check shell serve stop-serve test-lab
 
@@ -55,5 +58,12 @@ check:
 shell:
 	$(DOCKER) exec -it clab-$(LAB)-$(NODE) bash
 
-serve stop-serve test-lab:
-	@echo "$@: available from milestone M2"; exit 2
+serve:
+	REPO=$(abspath $(HERE)/..) $(HERE)/scripts/serve.sh
+
+stop-serve:
+	-pkill -f twinlab-server
+	-pkill -f netverify-server
+
+test-lab:
+	cd $(HERE)/.. && NETTWIN_LAB=1 uv run pytest tests/lab -q

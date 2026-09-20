@@ -1,0 +1,9 @@
+{
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "allow": [
+      "mcp__twinlab",
+      "mcp__netverify"
+    ]
+  }
+}

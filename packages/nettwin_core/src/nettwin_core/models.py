@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -70,12 +70,17 @@ class ChangeResult(BaseModel):
 
 
 class NodeState(BaseModel):
-    """Captured state of one node: FRR running-config plus kernel networking state."""
+    """Captured state of one node: FRR running-config plus kernel networking state.
+
+    `addrs`, `links`, `routes` and `bridge_vlans` hold normalised `ip -j` / `bridge -j`
+    output (volatile fields such as nhid and ifindex removed, management eth0 dropped).
+    """
 
     running_config: str = ""
     addrs: Any = None
     links: Any = None
     routes: Any = None
+    bridge_vlans: Any = None
     nft: str = ""
 
 
@@ -87,11 +92,32 @@ class Snapshot(BaseModel):
     created_at: datetime
     nodes: dict[str, NodeState]
 
-    @staticmethod
-    def compute_id(nodes: dict[str, NodeState]) -> str:
-        payload = {name: nodes[name].model_dump(mode="json") for name in sorted(nodes)}
+    #: Fields that are derived from the network rather than configured on it. They are stored
+    #: for diffing but excluded from the id so a snapshot taken mid-convergence still matches.
+    DERIVED_FIELDS: ClassVar[frozenset[str]] = frozenset({"routes"})
+
+    @classmethod
+    def compute_id(cls, nodes: dict[str, NodeState]) -> str:
+        payload = {
+            name: nodes[name].model_dump(mode="json", exclude=set(cls.DERIVED_FIELDS))
+            for name in sorted(nodes)
+        }
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(blob).hexdigest()
+
+    def diff(self, other: Snapshot) -> dict[str, list[str]]:
+        """Configured fields that differ per node between two snapshots (for error messages)."""
+        result: dict[str, list[str]] = {}
+        for name in sorted(set(self.nodes) | set(other.nodes)):
+            a, b = self.nodes.get(name, NodeState()), other.nodes.get(name, NodeState())
+            fields = [
+                f
+                for f in NodeState.model_fields
+                if f not in self.DERIVED_FIELDS and getattr(a, f) != getattr(b, f)
+            ]
+            if fields:
+                result[name] = fields
+        return result
 
     @classmethod
     def build(cls, lab: str, nodes: dict[str, NodeState]) -> Snapshot:
