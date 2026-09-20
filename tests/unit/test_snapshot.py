@@ -304,3 +304,31 @@ def test_normalise_links_scrubs_bridge_timers_but_keeps_vlan_ids() -> None:
     assert links["br0"]["linkinfo"]["info_data"] == {"vlan_filtering": 1}
     assert links["eth2"]["linkinfo"]["info_slave_data"] == {"cost": 2}
     assert links["eth3.10"]["linkinfo"]["info_data"]["id"] == 10
+
+
+async def test_restore_and_apply_flush_route_caches_on_every_node(tmp_path: Path) -> None:
+    from nettwin_core.settings import Settings
+    from twinlab.app import TwinLab
+    from twinlab.snapshot import FLUSH_ROUTE_CACHE
+
+    fake = FakeExecutor()
+    fake.on(lambda node, argv: "[]" if argv[0] == "ip" and "-j" in argv else "")
+    settings = Settings.from_env(
+        {
+            "NETTWIN_STATE_DIR": str(tmp_path),
+            "NETTWIN_TOPOLOGY": str(
+                Path(__file__).parent.parent / "fixtures" / "topology.clab.yml"
+            ),
+        }
+    )
+    app = TwinLab.from_settings(settings, executor=fake)
+    from nettwin_core.ops import SetMtu
+
+    await app.apply("r1", [SetMtu(iface="eth1", mtu=1400)])
+    flushed = {node for node, argv in fake.calls if list(argv) == FLUSH_ROUTE_CACHE}
+    assert flushed == {"r1", "r2", "r3", "h1"}
+    fake.calls.clear()
+    snap = await app.snapshot()
+    await app.rollback(snap.id)
+    flushed = {node for node, argv in fake.calls if list(argv) == FLUSH_ROUTE_CACHE}
+    assert flushed == {"r1", "r2", "r3", "h1"}

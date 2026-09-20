@@ -11,3 +11,5 @@ setaddr eth1 10.0.12.1/30
 setaddr eth2 10.0.13.1/30
 setaddr eth3 10.0.14.1/30
 nft flush ruleset
+# Drop cached path MTUs so probes see the real path after a change.
+ip route flush cache

@@ -21,7 +21,7 @@ from nettwin_core.topology import Topology, load_topology
 from twinlab import allowlist
 from twinlab.apply import ApplyError, apply_ops, describe_change
 from twinlab.changes import ChangeStore
-from twinlab.snapshot import SnapshotStore, capture, restore
+from twinlab.snapshot import SnapshotStore, capture, flush_route_caches, restore
 
 
 class UnknownNode(ValueError):
@@ -106,6 +106,7 @@ class TwinLab:
                 raise ApplyError(
                     node, exc.argv, f"{exc.detail} (rolled back to snapshot {before.short_id})"
                 ) from exc
+            await flush_route_caches(self.executor, self.topology)
             after = await self.snapshot()
         change = ChangeResult(
             change_id=secrets.token_hex(8),

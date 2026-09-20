@@ -18,3 +18,5 @@ bridge vlan add dev eth1 vid 10
 bridge vlan add dev eth1 vid 20
 bridge vlan add dev eth2 vid 10 pvid untagged
 bridge vlan add dev eth3 vid 20 pvid untagged
+# Drop cached path MTUs so probes see the real path after a change.
+ip route flush cache

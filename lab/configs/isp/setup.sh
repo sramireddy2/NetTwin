@@ -8,3 +8,5 @@ setaddr() { ip -4 addr flush dev "$1"; ip addr add "$2" dev "$1"; ip link set de
 setaddr eth1 203.0.113.2/30
 setaddr eth2 198.51.100.1/24
 nft flush ruleset
+# Drop cached path MTUs so probes see the real path after a change.
+ip route flush cache

@@ -206,4 +206,23 @@ async def restore(
         return node.name, plan.argv()
 
     results = await asyncio.gather(*(one(n) for n in topology.nodes.values()))
+    await flush_route_caches(executor, topology)
     return {name: cmds for name, cmds in results if cmds}
+
+
+FLUSH_ROUTE_CACHE = ["ip", "route", "flush", "cache"]
+
+
+async def flush_route_caches(executor: Executor, topology: Topology) -> None:
+    """Drop cached path MTUs on every node.
+
+    A router that forwards a DF packet out a smaller-MTU link sends ICMP "fragmentation
+    needed" and the source host caches that path MTU for ten minutes. After the twin is
+    changed or restored that cache is stale and would make a correct fix look broken to the
+    verifier, so every mutation ends by flushing it. Failures are ignored: the cache is
+    advisory and a node without the feature has nothing to flush.
+    """
+    await asyncio.gather(
+        *(executor.exec(node, FLUSH_ROUTE_CACHE, timeout=10) for node in topology.nodes),
+        return_exceptions=True,
+    )
