@@ -38,8 +38,15 @@ class RunOutput(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
     cost_usd: float | None = None
     notes: str = ""
+
+
+class RunnerUnavailable(RuntimeError):
+    """The runner cannot produce runs right now (logged out, rate limited): stop the matrix
+    instead of recording failures that say nothing about the agent."""
 
 
 @dataclass

@@ -15,7 +15,7 @@ from netbench.claude_cli import (
     parse_stream,
     split_tool_name,
 )
-from netbench.runner import RunContext
+from netbench.runner import RunContext, RunnerUnavailable
 from tests.unit.test_manual_runner import _bundle
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "stream"
@@ -43,6 +43,7 @@ def test_parse_team_stream_counts_tools_agents_and_usage() -> None:
     assert summary.model == "claude-sonnet-5" and summary.subtype == "success"
     assert not summary.is_error and summary.error is None
     assert summary.num_turns == 9 and summary.duration_ms == 244000
+    assert summary.results_seen == 2  # the subagent's result event must not overwrite
     assert summary.total_cost_usd == pytest.approx(0.4321)
     assert summary.input_tokens == 1200 and summary.output_tokens == 3400
     assert summary.cache_read_tokens == 90000 and summary.cache_creation_tokens == 8000
@@ -143,6 +144,7 @@ async def test_run_prefers_the_export_bundle_and_writes_a_transcript(tmp_path: P
     assert out.verification is not None and out.verification.passed
     assert out.export == {"export_id": "abc123", "status": "pending", "decided_by": None}
     assert out.input_tokens == 1200 and out.cost_usd == pytest.approx(0.4321)
+    assert out.cache_read_tokens == 90000 and out.cache_creation_tokens == 8000
     assert len(out.tool_calls) == 13
     assert "turns=9" in out.notes and "agents=5" in out.notes and "rc=0" in out.notes
     transcript = tmp_path / "transcripts" / "001-ospf-area-mismatch.jsonl"
@@ -163,13 +165,24 @@ async def test_run_falls_back_to_the_final_report_without_an_export(tmp_path: Pa
     assert out.verification is None and out.export is None
 
 
-async def test_run_records_timeouts_and_errors(tmp_path: Path) -> None:
+async def test_run_stops_the_matrix_when_the_cli_is_unavailable(tmp_path: Path) -> None:
+    async def logged_out(
+        argv: list[str], stdin: str, cwd: Path, timeout: float
+    ) -> tuple[int, list[str], str]:
+        return 1, AUTH_ERROR, ""
+
+    runner = ClaudeCliRunner(CallableAdmin(_inject, dict), cli="c", cwd=tmp_path, spawn=logged_out)
+    with pytest.raises(RunnerUnavailable, match="authentication"):
+        await runner.run(_ctx())
+
+
+async def test_run_records_a_timeout_as_an_empty_output(tmp_path: Path) -> None:
     async def killed(
         argv: list[str], stdin: str, cwd: Path, timeout: float
     ) -> tuple[int, list[str], str]:
-        return -1, AUTH_ERROR, "killed after 5s"
+        return -1, TEAM[:3], "killed after 5s"
 
     runner = ClaudeCliRunner(CallableAdmin(_inject, dict), cli="c", cwd=tmp_path, spawn=killed)
     out = await runner.run(_ctx())
     assert out.root_cause is None and out.change_ids == []
-    assert "timed_out" in out.notes and "authentication_failed" in out.notes
+    assert "timed_out" in out.notes and "rc=-1" in out.notes

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from netbench.admin import AdminClient
 from netbench.clients import ToolClient
-from netbench.runner import RunContext, Runner, RunOutput
+from netbench.runner import RunContext, Runner, RunnerUnavailable, RunOutput
 from netbench.scoring import Score, score_run
 from nettwin_core.models import ChangeResult, VerificationReport
 from nettwin_core.scenario import Scenario
@@ -141,6 +141,10 @@ class Harness:
                     use_verifier=config.verifier,
                 )
             )
+        except RunnerUnavailable:
+            log.error("run %s: runner unavailable, stopping the matrix; nothing recorded", rid)
+            await self.reset()
+            raise
         except Exception as exc:  # noqa: BLE001 - a runner crash is a scored failure
             log.exception("run %s crashed", rid)
             error = f"{type(exc).__name__}: {exc}"

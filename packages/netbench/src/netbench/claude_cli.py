@@ -26,7 +26,7 @@ from typing import Any
 from pydantic import BaseModel, Field, ValidationError
 
 from netbench.admin import AdminClient
-from netbench.runner import RunContext, RunOutput, ToolCall
+from netbench.runner import RunContext, RunnerUnavailable, RunOutput, ToolCall
 from nettwin_core.models import RootCause, VerificationReport
 
 #: Tools the headless commander may use without a permission prompt. Bare MCP server names
@@ -40,6 +40,12 @@ DEFAULT_ALLOWED_TOOLS = (
 )
 STREAM_LINE_LIMIT = 16 * 1024 * 1024
 _REPORT_RE = re.compile(r"\{\s*\"root_cause\"\s*:.*\}", re.DOTALL)
+#: Errors that mean the CLI, not the agent, failed: stop the matrix rather than score them.
+_UNAVAILABLE_RE = re.compile(
+    r"authentication|not logged in|log in|rate.?limit|usage limit|hit your limit|"
+    r"limit reached|overloaded|quota",
+    re.IGNORECASE,
+)
 
 Spawn = Callable[[list[str], str, Path, float], Awaitable[tuple[int, list[str], str]]]
 
@@ -94,6 +100,7 @@ class StreamSummary(BaseModel):
     agents_launched: list[str] = Field(default_factory=list)
     events: int = 0
     skipped_lines: int = 0
+    results_seen: int = 0
 
     @property
     def tool_calls(self) -> list[ToolCall]:
@@ -171,6 +178,12 @@ def parse_stream(lines: Iterable[str]) -> StreamSummary:
                             block.get("is_error", False)
                         )
         elif kind == "result":
+            # The main thread's result comes first (result_index 0); each subagent task adds
+            # its own result event afterwards. Keep the main one.
+            if summary.results_seen and int(event.get("result_index") or 0) != 0:
+                summary.results_seen += 1
+                continue
+            summary.results_seen += 1
             summary.subtype = event.get("subtype")
             summary.is_error = summary.is_error or bool(event.get("is_error"))
             summary.num_turns = int(event.get("num_turns") or 0)
@@ -300,6 +313,10 @@ class ClaudeCliRunner:
             safe = re.sub(r"[^A-Za-z0-9._-]+", "_", ctx.scenario_id)
             path = self.transcripts_dir / f"{safe}.jsonl"
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if summary.is_error and not summary.tool_uses:
+            failure = f"{summary.error or ''} {summary.final_text}".strip()
+            if _UNAVAILABLE_RE.search(failure) or _UNAVAILABLE_RE.search(stderr):
+                raise RunnerUnavailable(f"claude CLI unavailable: {failure[:200]}")
         report = extract_report(summary.final_text)
 
         new = [e for e in await self.admin.exports() if e["export_id"] not in seen]
@@ -338,6 +355,8 @@ class ClaudeCliRunner:
             tool_calls=summary.tool_calls,
             input_tokens=summary.input_tokens,
             output_tokens=summary.output_tokens,
+            cache_read_tokens=summary.cache_read_tokens,
+            cache_creation_tokens=summary.cache_creation_tokens,
             cost_usd=summary.total_cost_usd,
             notes=notes,
         )
