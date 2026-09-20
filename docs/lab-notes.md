@@ -88,6 +88,12 @@ converges in 8 to 9 s, so a benchmark run can reset the twin in roughly 10 s.
 - **`frr-reload.py` works in the container** and is what `golden` uses to diff the
   running config against `/golden/frr.conf`; the running-config only differs from the
   golden file in FRR's canonical ordering (`exit` lines, timer order, `domainname`).
+- **Hosts cache path MTU for ten minutes.** When r2 forwards a 1500-byte DF probe out a
+  1400-byte link it answers ICMP fragmentation-needed and h10 caches a path MTU of 1400.
+  Restoring the interface does not clear that cache, so after scenario 005 every later
+  DF probe failed locally and a correct MTU fix would have looked broken to the verifier.
+  `apply`, `rollback` and the golden scripts now end with `ip route flush cache` on every
+  node. The first full verifier run over all scenarios found this; the second passed.
 
 ## Fault 1: OSPF area mismatch (scenario 001)
 
@@ -176,3 +182,7 @@ match before moving on.
 
 Lab verification (2026-09-20): all 14 pass in 4 min 13 s total, about 18 s per scenario
 including reconvergence. Every rollback matched the pre-injection snapshot byte for byte.
+
+Verifier check (2026-09-20): with netverify, golden passes every rule and receives a signed
+attestation, and each scenario fails exactly its `expected_failed_rules` (15 tests, 10 min
+14 s including a convergence wait per scenario).
