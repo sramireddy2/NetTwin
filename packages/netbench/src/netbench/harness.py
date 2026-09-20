@@ -80,7 +80,7 @@ class Harness:
 
     def append(self, record: RunRecord) -> None:
         self.results_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.results_path.open("a", encoding="utf-8") as fh:
+        with self.results_path.open("a", encoding="utf-8", newline="\n") as fh:
             fh.write(record.model_dump_json() + "\n")
 
     # --- twin control ------------------------------------------------------------------------
