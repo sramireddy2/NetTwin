@@ -15,7 +15,7 @@ from netbench.admin import AdminClient
 from netbench.clients import ToolClient
 from netbench.runner import RunContext, Runner, RunOutput
 from netbench.scoring import Score, score_run
-from nettwin_core.models import ChangeResult
+from nettwin_core.models import ChangeResult, VerificationReport
 from nettwin_core.scenario import Scenario
 
 log = logging.getLogger("netbench")
@@ -148,8 +148,20 @@ class Harness:
         duration = round(time.monotonic() - clock, 1)
         after = await self.verify.call("reachability_matrix")
         after_probes = after.data["probes"] if after.ok and after.data else []
+        # The harness judges the outcome itself, whatever the agent claimed or skipped.
+        check = await self.verify.call("intent_check", timeout=300)
+        after_report = (
+            VerificationReport.model_validate(check.data) if check.ok and check.data else None
+        )
         changes = await self.changes_for(output.change_ids)
-        score = score_run(scenario, output, changes, self.golden_probes, after_probes)
+        score = score_run(
+            scenario,
+            output,
+            changes,
+            self.golden_probes,
+            after_probes,
+            after_verification=after_report,
+        )
         record = RunRecord(
             run_id=rid,
             matrix=self.matrix,
@@ -165,9 +177,10 @@ class Harness:
         self.append(record)
         await self.reset()
         log.info(
-            "%s: root_cause=%s verified=%s collateral_free=%s minimal=%s (%.0fs)",
+            "%s: root_cause=%s fix_correct=%s verified=%s collateral_free=%s minimal=%s (%.0fs)",
             rid,
             score.root_cause,
+            score.fix_correct,
             score.verified,
             score.collateral_free,
             score.minimal,

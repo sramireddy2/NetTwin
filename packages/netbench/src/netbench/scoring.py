@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from netbench.runner import RunOutput
-from nettwin_core.models import ChangeResult
+from nettwin_core.models import ChangeResult, VerificationReport
 from nettwin_core.scenario import Scenario
 
 
@@ -20,6 +20,11 @@ class Score(BaseModel):
     root_cause_node: bool
     root_cause_component: bool
     root_cause: bool = Field(description="node and component both match the ground truth")
+    fix_correct: bool | None = Field(
+        default=None,
+        description="the harness's own intent_check passed after the run, whatever the agent "
+        "said; None when it was not measured (records from before this column existed)",
+    )
     verified: bool = Field(description="the verifier passed every intent rule after the fix")
     collateral: list[str] = Field(
         default_factory=list, description="golden probes whose result changed after the run"
@@ -44,6 +49,7 @@ def score_run(
     changes: list[ChangeResult],
     golden_probes: list[dict[str, Any]],
     after_probes: list[dict[str, Any]],
+    after_verification: VerificationReport | None = None,
 ) -> Score:
     causes = scenario.causes
     rc = output.root_cause
@@ -66,11 +72,13 @@ def score_run(
     else:
         minimal = not changes
     verified = bool(output.verification and output.verification.passed)
+    fix_correct = None if after_verification is None else bool(after_verification.passed)
     exported = bool(output.export and output.export.get("status") in ("approved", "pending"))
     return Score(
         root_cause_node=node_ok,
         root_cause_component=component_ok,
         root_cause=node_ok and component_ok,
+        fix_correct=fix_correct,
         verified=verified,
         collateral=collateral,
         collateral_free=not collateral,

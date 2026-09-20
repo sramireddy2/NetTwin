@@ -52,7 +52,11 @@ async def test_fake_agent_is_perfect_on_every_scenario(
         for r in records
         if r.error
         or not (
-            r.score.root_cause and r.score.verified and r.score.collateral_free and r.score.minimal
+            r.score.root_cause
+            and r.score.fix_correct
+            and r.score.verified
+            and r.score.collateral_free
+            and r.score.minimal
         )
     ]
     assert not bad, bad
