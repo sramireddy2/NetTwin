@@ -41,7 +41,7 @@ branch was deleted, so it was re-opened as #7):
   record per run, resumable by run id), `FakeAgentRunner` replaying `expected_fix`, structured
   scoring (root cause node+component, verified, collateral vs golden matrix, minimal), markdown
   report, `netbench run|report` CLI, twinlab `get_change` tool, `make serve-bench`.
-- M7 claude agents (branch `feat/claude-agents`, PR open): `.claude/agents/` role files
+- M7 claude agents (branch `feat/claude-agents`, PR #9 open): `.claude/agents/` role files
   (l2/l3/policy investigators with `run_show_command` only, change-agent without export,
   verifier scoped to netverify), `.claude/skills/diagnose` and `diagnose-solo`,
   `netbench.roles` (frontmatter parser, reused by M10), `ManualRunner` + `netbench run
