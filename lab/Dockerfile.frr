@@ -1,0 +1,6 @@
+# FRRouting router image for the twin. The stock image has no data-plane tooling, so add
+# nftables (ACLs and NAT live here, FRR access-lists only filter routes), iputils for
+# DF-bit pings, iperf3 for large transfers, and python3 for frr-reload.py.
+ARG FRR_VERSION=10.2.1
+FROM quay.io/frrouting/frr:${FRR_VERSION}
+RUN apk add --no-cache iproute2 nftables iputils iperf3 tcpdump curl python3 bash
