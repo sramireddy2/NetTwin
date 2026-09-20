@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venvs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# NetTwin runtime state (lives in ~/.nettwin inside WSL, never in the repo)
+.nettwin/
+results/**/transcripts/
+*.jsonl.tmp
+
+# Claude Code local overrides
+.claude/settings.local.json
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
