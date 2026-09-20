@@ -92,11 +92,30 @@ class Harness:
             raise RuntimeError(f"twin is not converged before baseline: {converged.data}")
         snap = await self.twin.call("snapshot")
         self.golden_snapshot = snap.require()["id"]
+        known = self.known_golden_ids()
+        if known and self.golden_snapshot not in known:
+            raise RuntimeError(
+                f"twin snapshot {self.golden_snapshot[:12]} is not the golden state this matrix "
+                f"was recorded against ({', '.join(k[:12] for k in sorted(known))}); a previous "
+                "run probably left a fault planted. Run `make -C lab golden` and retry."
+            )
         matrix = await self.verify.call("reachability_matrix")
         self.golden_probes = matrix.require()["probes"]
         log.info(
             "baseline snapshot %s, %d probes", self.golden_snapshot[:12], len(self.golden_probes)
         )
+
+    def known_golden_ids(self) -> set[str]:
+        """Golden snapshot ids that earlier runs of this matrix were scored against."""
+        if not self.results_path.exists():
+            return set()
+        ids: set[str] = set()
+        for line in self.results_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                golden = (json.loads(line).get("score") or {}).get("golden_snapshot_id")
+                if golden:
+                    ids.add(golden)
+        return ids
 
     async def reset(self) -> None:
         assert self.golden_snapshot is not None
@@ -139,6 +158,8 @@ class Harness:
                     twin=self.twin,
                     verify=self.verify,
                     use_verifier=config.verifier,
+                    config_name=config.name,
+                    trial=trial,
                 )
             )
         except RunnerUnavailable:
@@ -165,6 +186,7 @@ class Harness:
             self.golden_probes,
             after_probes,
             after_verification=after_report,
+            golden_snapshot_id=self.golden_snapshot,
         )
         record = RunRecord(
             run_id=rid,
@@ -181,13 +203,15 @@ class Harness:
         self.append(record)
         await self.reset()
         log.info(
-            "%s: root_cause=%s fix_correct=%s verified=%s collateral_free=%s minimal=%s (%.0fs)",
+            "%s: root_cause=%s fix_correct=%s verified=%s collateral_free=%s minimal=%s "
+            "golden=%s (%.0fs)",
             rid,
             score.root_cause,
             score.fix_correct,
             score.verified,
             score.collateral_free,
             score.minimal,
+            score.restored_golden,
             duration,
         )
         return record

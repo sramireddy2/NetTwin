@@ -29,12 +29,13 @@ def summary_table(records: list[RunRecord]) -> str:
         by_config[r.config.name].append(r)
     lines = [
         "| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | "
-        "Errors | Mean s |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "Errors | Mean s | Golden |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for name, rows in sorted(by_config.items()):
         n = len(rows)
         measured = [r for r in rows if r.score.fix_correct is not None]
+        golden = [r for r in rows if r.score.restored_golden is not None]
         lines.append(
             f"| {name} | {n} | {_pct(sum(r.score.root_cause for r in rows), n)} | "
             f"{_pct(sum(bool(r.score.fix_correct) for r in measured), len(measured))} | "
@@ -42,7 +43,8 @@ def summary_table(records: list[RunRecord]) -> str:
             f"{_pct(sum(r.score.collateral_free for r in rows), n)} | "
             f"{_pct(sum(r.score.minimal for r in rows), n)} | "
             f"{sum(r.error is not None for r in rows)} | "
-            f"{sum(r.duration_s for r in rows) / n:.0f} |"
+            f"{sum(r.duration_s for r in rows) / n:.0f} | "
+            f"{_pct(sum(bool(r.score.restored_golden) for r in golden), len(golden))} |"
         )
     return "\n".join(lines)
 

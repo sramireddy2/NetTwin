@@ -12,6 +12,7 @@ JSON line is the fallback when nothing was exported.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import platform
@@ -101,6 +102,7 @@ class StreamSummary(BaseModel):
     events: int = 0
     skipped_lines: int = 0
     results_seen: int = 0
+    saw_main_text: bool = False
 
     @property
     def tool_calls(self) -> list[ToolCall]:
@@ -168,6 +170,7 @@ def parse_stream(lines: Iterable[str]) -> StreamSummary:
                         summary.agents_launched.append(str(use.input["subagent_type"]))
                 elif block.get("type") == "text" and parent is None and block.get("text"):
                     summary.final_text = str(block["text"])
+                    summary.saw_main_text = True
         elif kind == "user":
             message = event.get("message") or {}
             content = message.get("content")
@@ -194,7 +197,13 @@ def parse_stream(lines: Iterable[str]) -> StreamSummary:
             summary.output_tokens = usage.get("output_tokens")
             summary.cache_read_tokens = usage.get("cache_read_input_tokens")
             summary.cache_creation_tokens = usage.get("cache_creation_input_tokens")
-            if isinstance(event.get("result"), str) and event["result"].strip():
+            # With background subagents the result text is the first turn's message, not
+            # the final report; the last main-thread assistant text is what the skill wrote.
+            if (
+                not summary.saw_main_text
+                and isinstance(event.get("result"), str)
+                and event["result"].strip()
+            ):
                 summary.final_text = event["result"]
             if event.get("is_error") and not summary.error:
                 summary.error = str(event.get("result") or event.get("subtype") or "error")
@@ -249,16 +258,53 @@ async def spawn_cli(
         assert proc.stderr is not None
         return (await proc.stderr.read()).decode("utf-8", "replace")
 
+    # A watchdog kills the whole tree at the deadline. Cancelling the pipe reads instead
+    # (wait_for) blocks on Windows until every child closes the pipe, which is exactly what
+    # a hung subagent never does; killing the tree closes the pipes and the drains finish.
+    deadline_hit = False
+
+    async def watchdog() -> None:
+        nonlocal deadline_hit
+        await asyncio.sleep(timeout)
+        deadline_hit = True
+        await kill_tree(proc)
+
+    guard = asyncio.create_task(watchdog())
     try:
-        _, _, stderr = await asyncio.wait_for(
-            asyncio.gather(feed(), drain_stdout(), drain_stderr()), timeout
-        )
+        _, _, stderr = await asyncio.gather(feed(), drain_stdout(), drain_stderr())
         rc = await proc.wait()
-    except TimeoutError:
-        proc.kill()
-        await proc.wait()
+    finally:
+        if not guard.done():
+            guard.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await guard
+    if deadline_hit:
         rc, stderr = -1, f"killed after {timeout:.0f}s"
     return rc, lines, stderr
+
+
+async def kill_tree(proc: asyncio.subprocess.Process) -> None:
+    """Kill the CLI and every process it spawned (subagents run as child processes)."""
+    if platform.system() == "Windows":
+        killer = await asyncio.create_subprocess_exec(
+            "taskkill",
+            "/F",
+            "/T",
+            "/PID",
+            str(proc.pid),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await killer.wait()
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), 9)
+        except (ProcessLookupError, PermissionError, AttributeError):
+            proc.kill()
+    try:
+        await asyncio.wait_for(proc.wait(), 30)
+    except TimeoutError:
+        proc.kill()
 
 
 @dataclass
@@ -310,7 +356,8 @@ class ClaudeCliRunner:
         summary = parse_stream(lines)
         if self.transcripts_dir is not None:
             self.transcripts_dir.mkdir(parents=True, exist_ok=True)
-            safe = re.sub(r"[^A-Za-z0-9._-]+", "_", ctx.scenario_id)
+            label = f"{ctx.scenario_id}.{ctx.config_name or self.name}.{ctx.trial}"
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "_", label)
             path = self.transcripts_dir / f"{safe}.jsonl"
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         if summary.is_error and not summary.tool_uses:
@@ -362,6 +409,42 @@ class ClaudeCliRunner:
         )
 
 
+#: Agents sometimes write the protocol instead of the layer; the scorer only uses node and
+#: component, so map loosely rather than lose the diagnosis.
+_LAYER_ALIASES = {
+    "l2": "L2",
+    "link": "L2",
+    "vlan": "L2",
+    "physical": "L2",
+    "l3": "L3",
+    "routing": "L3",
+    "ospf": "L3",
+    "bgp": "L3",
+    "ip": "L3",
+    "policy": "policy",
+    "nft": "policy",
+    "acl": "policy",
+    "nat": "policy",
+    "firewall": "policy",
+    "host": "host",
+}
+
+
+def coerce_root_cause(candidate: Any) -> RootCause | None:
+    if not isinstance(candidate, dict):
+        return None
+    try:
+        return RootCause.model_validate(candidate)
+    except ValidationError:
+        pass
+    layer = str(candidate.get("layer", "")).strip().lower()
+    fixed = {**candidate, "layer": _LAYER_ALIASES.get(layer, "host")}
+    try:
+        return RootCause.model_validate(fixed)
+    except ValidationError:
+        return None
+
+
 def _root_cause_from(
     bundle: dict[str, Any] | None, report: dict[str, Any] | None
 ) -> RootCause | None:
@@ -371,9 +454,7 @@ def _root_cause_from(
     if report is not None:
         candidates.append(report.get("root_cause"))
     for candidate in candidates:
-        if isinstance(candidate, dict):
-            try:
-                return RootCause.model_validate(candidate)
-            except ValidationError:
-                continue
+        cause = coerce_root_cause(candidate)
+        if cause is not None:
+            return cause
     return None

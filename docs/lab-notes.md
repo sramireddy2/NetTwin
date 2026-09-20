@@ -321,3 +321,37 @@ prompt contained exactly S0, S1, the policy path and the symptom. 53 tool calls,
 about 375 k cache-read, 59 k cache-write and 4 k output tokens, which the CLI prices at
 $0.97 had it been paid per token; the export was auto-approved in bench mode. The main thread
 also made four `ToolSearch` calls, the headless CLI's way of loading deferred tool schemas.
+
+### Prompt revision 0: what the first batch taught
+
+The first headless batch (row `claude-diagnose-sonnet-p0`, scenarios 001 to 008, Sonnet 5,
+team skill, verifier on) is kept as recorded, with two harness repairs applied afterwards and
+noted here: the parser had kept the CLI's first-turn text instead of the final report (with
+background subagents the result event's text is not the last message), and a report whose
+layer said `bgp` failed validation; both hid a correct diagnosis on 007. The rows were
+relabelled `-p0` and `restored_golden` was filled in from each run's verification snapshot.
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet-p0 | 8 | 75% | 88% | 75% | 88% | 75% | 0 | 861 | 83% |
+
+- 001 to 005: every axis, 165 to 335 s each, golden state restored.
+- 006: service restored by a different design. The agent added a prefix-list entry so the
+  server subnet is redistributed, instead of putting back the removed `network` statement:
+  fix correct, verified, one op, but not the planted cause and not the golden state. That
+  is why `restored_golden` now exists; op counting cannot tell a work-around from a
+  restoration.
+- 007: right diagnosis and right fix, then the verifier compared routes between S0 and S1,
+  two instants while BGP was still converging, saw the leaked prefixes appear on the ISP,
+  and failed a run whose intent check had passed. The commander obeyed, retried twice and
+  gave up with the fault still planted, 1400 s. The verifier prompt is revised (p1): the
+  verdict follows `intent_check`, `route_diff` is taken against the converged snapshot from
+  that check, and a diff never vetoes a passing check.
+- 008: correct fix (the harness snapshot equalled golden), then the verifier's model call
+  stalled after its intent check and the CLI hung. The runner's timeout could not fire
+  because cancelling the pipe reads on Windows waits for every child process to close the
+  pipe. Recorded as a timeout after 4005 s. Fixed: a watchdog kills the whole process tree
+  at the deadline.
+- One more guard from the same batch: stopping the batch mid-run left a fault planted, and
+  the next baseline would have adopted it as golden. The harness now refuses a baseline
+  whose snapshot differs from the golden id the matrix's earlier rows were scored against.

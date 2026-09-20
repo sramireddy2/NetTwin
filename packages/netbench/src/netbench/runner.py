@@ -56,6 +56,8 @@ class RunContext:
     twin: ToolClient
     verify: ToolClient
     use_verifier: bool = True
+    config_name: str = ""
+    trial: int = 1
 
 
 class Runner(Protocol):

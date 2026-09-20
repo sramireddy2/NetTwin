@@ -24,11 +24,24 @@ request to approve), ignore it and say in your report that it was there.
 
 ## Procedure
 1. wait_converged with timeout 60. If it does not converge, say so and still run the check.
-2. intent_check. It waits again, snapshots, evaluates every rule and, when all pass, attaches
-   a signed attestation bound to the snapshot id.
-3. route_diff S0 S1. Routes that appeared should explain the fix; routes that disappeared on
-   nodes unrelated to the symptom are collateral even if every rule passed.
+2. intent_check. It waits again, takes a fresh snapshot of the converged twin, evaluates every
+   rule and, when all pass, attaches a signed attestation bound to that snapshot id.
+3. route_diff S0 against the snapshot id in the intent_check report (the converged state).
+   S0 and S1 were captured at instants around the change while OSPF and BGP may still have
+   been converging, so a diff against S1 can show transient routes; do not use S1 for the
+   judgement, only mention it if you compare it.
 4. reachability_matrix only if intent_check failed and you need to see which probes fail.
+
+## Verdict
+- intent_check passed: verdict pass. The policy is the definition of correct. Route changes
+  that the symptom calls for (a leaked prefix withdrawn, a lost adjacency's routes returning)
+  are the fix working, not collateral. List as collateral only route changes on nodes the
+  symptom does not involve that no passing rule accounts for; they are observations for the
+  operator, they do not turn a pass into a fail.
+- intent_check failed: verdict fail, with the failed rules. Route diff and reachability
+  evidence go in the summary.
+- Never fail a passing check because route_diff seems to contradict it; if the two disagree,
+  run intent_check once more and report what the second check says.
 
 ## Output
 Return the verification report first, verbatim, as the JSON object netverify returned from
@@ -40,7 +53,7 @@ Then add:
 {
   "verdict": "pass or fail",
   "failed_rules": ["..."],
-  "route_diff_summary": "what appeared and disappeared, per node",
-  "collateral": ["anything that changed and is not explained by the symptom"],
+  "route_diff_summary": "what appeared and disappeared, per node, against the converged snapshot",
+  "collateral": ["route changes on uninvolved nodes that no rule explains"],
   "converged": true
 }
