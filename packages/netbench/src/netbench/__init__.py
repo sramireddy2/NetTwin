@@ -1,3 +1,3 @@
-"""NetBench: scenarios in, scores out. Implemented from milestone M6."""
+"""NetBench: scenarios in, scores out."""
 
 __version__ = "0.1.0"

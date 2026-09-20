@@ -80,6 +80,7 @@ async def test_tools_and_resource_are_listed(app: TwinLab) -> None:
             "rollback",
             "apply_config",
             "list_changes",
+            "get_change",
             "export_change",
         }
         resources = {str(r.uri) for r in (await session.list_resources()).resources}

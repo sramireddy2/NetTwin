@@ -55,5 +55,8 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["nettwin", "nettwin_core", "twinlab", "netverify", "netbench"]
