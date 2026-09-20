@@ -186,3 +186,30 @@ including reconvergence. Every rollback matched the pre-injection snapshot byte 
 Verifier check (2026-09-20): with netverify, golden passes every rule and receives a signed
 attestation, and each scenario fails exactly its `expected_failed_rules` (15 tests, 10 min
 14 s including a convergence wait per scenario).
+
+## NetBench harness with the fake agent (M6)
+
+`tests/lab/test_fake_agent.py` drives the whole benchmark loop in-process against the live
+lab: baseline (wait for convergence, golden snapshot, golden reachability matrix), then per
+scenario rollback to golden, inject through the admin path, wait for convergence, run the
+agent, take the after matrix, score, append one JSONL record, rollback again. The fake agent
+replays each scenario's `expected_fix` through the real tool surface (topology resource, the
+probe show command, `snapshot`, `apply_config`, `wait_converged`, `intent_check`,
+`export_change`), so it exercises the servers, the harness and the scoring at zero token
+cost and sets the ceiling every real agent is measured against.
+
+Lab result (2026-09-20), `NETTWIN_LAB=1 uv run pytest tests/lab/test_fake_agent.py`:
+
+| Config | Runs | Root cause | Verified fix | No collateral | Minimal | Errors | Mean s |
+|---|---|---|---|---|---|---|---|
+| fake | 14 | 100% | 100% | 100% | 100% | 0 | 22 |
+
+All 14 scenarios scored `RVC`. Wall clock 13 min 18 s, which includes the two rollbacks
+and the convergence waits around every run; the agent's own part averages 22 s.
+
+CLI over HTTP from Windows (2026-09-20), `uv run netbench run --runner fake --matrix v0`
+against `make serve-bench`: the same 14/14 `RVC`, 0 errors, 14/14 exports auto-approved,
+recorded in `results/v0/runs.jsonl`. Mean 33 s per run, 16 min 42 s wall clock. The mean is
+skewed by the first run: its `wait_converged` call, given a 60 s budget, returned after 153 s,
+so one poll of the concurrent show commands stalled for about 90 s. The other 13 runs took 18
+to 43 s and the stall did not recur in the other 29 fake-agent runs of the day.

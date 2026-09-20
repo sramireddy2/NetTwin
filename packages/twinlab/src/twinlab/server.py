@@ -209,6 +209,17 @@ def build_server(app: TwinLab, *, admin_token: str | None = None) -> MCPServer:
         return ChangeList(changes=app.changes.ids())
 
     @server.tool(
+        name="get_change",
+        description="Return an applied change: node, ops, before/after snapshot ids and diff.",
+        annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True),
+    )
+    async def get_change(change_id: str) -> ChangeResult:
+        try:
+            return app.changes.load(change_id)
+        except KeyError as exc:
+            raise ToolError(str(exc)) from exc
+
+    @server.tool(
         name="export_change",
         description=EXPORT_DESCRIPTION,
         annotations=ToolAnnotations(open_world_hint=True),
