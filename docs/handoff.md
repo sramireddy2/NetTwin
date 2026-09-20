@@ -1,6 +1,6 @@
 ---
 name: nettwin-handoff
-description: Handoff for the NetTwin build as of 2026-09-20 — what is merged, what is mid-flight on feat/bench-harness, environment facts, decisions, how to run, and the next milestones
+description: Handoff for the NetTwin build as of 2026-09-20 — what is merged (M0-M6), what is in PR (M7), environment facts, decisions, how to run, and the next milestones
 metadata:
   type: project
 ---
@@ -35,7 +35,6 @@ branch was deleted, so it was re-opened as #7):
   HMAC and that it covers the state after the last change and the policy in force, then asks the
   operator via MCP elicitation; `NETTWIN_BENCH=1` auto-approves; no-elicitation clients leave it
   pending for `nettwin approve <id>` (`/admin/approve/{id}`). Prompts `diagnose`, `propose-change`.
-
 - M6 netbench: `ToolClient` over in-memory or streamable-HTTP MCP sessions, `HttpAdmin` /
   `CallableAdmin` for the side door, `Harness` (baseline, reset, inject, run, score, one JSONL
   record per run, resumable by run id), `FakeAgentRunner` replaying `expected_fix`, structured
