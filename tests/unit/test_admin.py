@@ -67,7 +67,7 @@ async def test_admin_inject_and_scenarios(client: httpx.AsyncClient) -> None:
     async with client:
         listed = await client.get("/admin/scenarios", headers=AUTH)
         assert listed.status_code == 200
-        assert len(listed.json()) == 14
+        assert len(listed.json()) == 22
         injected = await client.post("/admin/inject/001", headers=AUTH)
         assert injected.status_code == 200, injected.text
         body = injected.json()

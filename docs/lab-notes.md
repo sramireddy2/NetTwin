@@ -253,3 +253,45 @@ started). The Claude Code desktop app did not surface the MCP elicitation, so `e
 returned `pending` and the operator decides with `nettwin approve d51b24a0865e`; the score
 counts a pending bundle as exported. The verifier subagent's transcript contains only its
 prompt and three netverify calls (`wait_converged`, `intent_check`, `route_diff`).
+
+## NetBench tier B, C, stretch and control scenarios (M8)
+
+Tier B breaks VLANs on the switch and the gateway; tier C breaks nftables policy. Two
+mechanics were needed: `NftRule` `delete` now accepts the rule text and twinlab resolves the
+kernel-assigned handle on the node at apply time (`nft -a list chain`, quotes stripped,
+protocol names compared numerically), and r3's golden ruleset gained an empty `input` chain
+so a host-firewall fault has somewhere to live. Scenarios may carry `extra_causes` (a reported
+cause matching any planted fault counts; a verified fix has to remove all of them) or no
+`ground_truth` at all (control: the right answer is no cause and no change).
+
+| Id | Tier | Layer | Root cause (node, component) | Expected red rules |
+|---|---|---|---|---|
+| 015-vlan-access-port | B | L2 | sw1: `vlan.access` | corp-to-srv, corp-to-srv-mtu, corp-to-inet |
+| 016-vlan-trunk-missing | B | L2 | sw1: `vlan.trunk` | guest-to-inet |
+| 017-vlan-subinterface-tag | B | L2 | r3: `vlan.subinterface` | guest-to-inet |
+| 018-nft-rule-order | C | policy | r3: `nft.rule_order` | corp-to-srv, corp-to-srv-mtu |
+| 019-nft-nat-missing | C | policy | r4: `nft.nat` | guest-to-inet |
+| 020-nft-ospf-filter | C | policy | r3: `nft.filter` | ospf-r2-eth2, ospf-r3-eth2 |
+| 021-two-faults-mtu-and-bgp | stretch | L2 + L3 | r2: `link.mtu` and r4: `bgp.network` | ospf-r1-eth1, ospf-r2-eth1, inet-to-srv |
+| 022-no-fault-control | control | none | none | none |
+
+Lab verification (2026-09-20): all eight inject, show their symptom on the probe, roll back
+byte-identical and fail exactly their expected rules under netverify (the control keeps its
+attestation), 17 tests in 6 min 33 s plus a 1 min 27 s re-run after two fixes. The fixes
+were a probe, not a fault: when only one router stops receiving hellos its peer keeps the
+neighbour listed in Init, so 020 probes `show ip ospf neighbor eth2` for a missing `Full`
+instead of a missing neighbour id; and the intent test now expects an attestation on the
+control. Two environment lessons: a bind-mounted config file such as r3's `nft.conf` only
+changes inside the container after `nettwin lab up` redeploys it, and `make stop-serve` hangs
+while a Claude Code session still holds MCP connections to the servers.
+
+Fake agent, `uv run netbench run --runner fake --matrix v0` resumed over the eight new
+scenarios (8 min 22 s, servers in bench mode, the earlier 14 runs kept):
+
+| Config | Runs | Root cause | Verified fix | No collateral | Minimal | Errors | Mean s |
+|---|---|---|---|---|---|---|---|
+| fake | 22 | 100% | 100% | 100% | 100% | 0 | 30 |
+
+The new runs took 17 to 28 s each; the control run applied nothing, exported nothing, and
+scored root cause and minimal for exactly that. The first 14 records were taken before r3's
+golden ruleset gained its empty input chain, which changes no behaviour.

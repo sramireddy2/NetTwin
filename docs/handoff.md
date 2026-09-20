@@ -13,8 +13,8 @@ file: `~/.claude/plans/recommended-combination-claude-code-lexical-galaxy.md`; c
 
 ## Where the build stands
 
-Merged to `main` (PRs #1 #2 #3 #4 #5 #7 #8; #6 was auto-closed by GitHub when its stacked base
-branch was deleted, so it was re-opened as #7):
+Merged to `main` (PRs #1 #2 #3 #4 #5 #7 #8 #9; #6 was auto-closed by GitHub when its stacked
+base branch was deleted, so it was re-opened as #7):
 
 - M0 scaffold: uv workspace (`nettwin` CLI + `packages/{nettwin_core,twinlab,netverify,netbench}`),
   CI (ruff + `pytest -m "not lab"`), `nettwin doctor`, `scripts/wsl.ps1`.
@@ -40,7 +40,7 @@ branch was deleted, so it was re-opened as #7):
   record per run, resumable by run id), `FakeAgentRunner` replaying `expected_fix`, structured
   scoring (root cause node+component, verified, collateral vs golden matrix, minimal), markdown
   report, `netbench run|report` CLI, twinlab `get_change` tool, `make serve-bench`.
-- M7 claude agents (branch `feat/claude-agents`, PR #9 open): `.claude/agents/` role files
+- M7 claude agents (PR #9, merged): `.claude/agents/` role files
   (l2/l3/policy investigators with `run_show_command` only, change-agent without export,
   verifier scoped to netverify), `.claude/skills/diagnose` and `diagnose-solo`,
   `netbench.roles` (frontmatter parser, reused by M10), `ManualRunner` + `netbench run
@@ -49,6 +49,13 @@ branch was deleted, so it was re-opened as #7):
   then the real team closed scenario 001 interactively: RVC, minimal, 4 min 4 s from S0 to
   export, verifier isolated; Claude Code desktop did not surface the elicitation, so the
   export went through the pending + `nettwin approve` path (`results/interactive/runs.jsonl`).
+- M8 scenarios B/C (branch `feat/bench-scenarios-bc`): 015-017 VLAN faults (sw1 access port,
+  sw1 trunk, r3 sub-interface tag), 018-020 nftables faults (rule order, NAT, OSPF input
+  filter), 021 two-fault stretch (MTU + BGP network, `extra_causes`), 022 no-fault control
+  (`ground_truth: null`). `NftRule` delete accepts rule text and twinlab resolves the handle on
+  the node; r3 golden nft gained an empty `input` chain; scoring handles multi-cause and
+  control; `tests/unit/test_scenarios_bc.py`. Live: all 8 inject/probe/rollback byte-identical
+  and fail exactly their rules; fake agent extended `results/v0` to 22 scenarios.
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -81,9 +88,10 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - `gh` 2.101 is at `C:\Program Files\GitHub CLI\gh.exe`, authenticated as sramireddy2, not on the
   Bash tool PATH: `export PATH="$PATH:/c/Program Files/GitHub CLI"`. The desktop app's PR pane
   refuses to bind this repo; use `gh pr checks N --watch`.
-- `claude` CLI is not installed (needed for M9: `npm install -g @anthropic-ai/claude-code`).
-- Ollama 0.34.1 on Windows with `qwen2.5-coder:7b` (tools capable); CPU only (Intel Arc iGPU,
-  32 GB RAM). Pull `qwen3:14b` before M10.
+- `claude` CLI 2.1.278 is installed at `C:\Users\shank\AppData\Roaming\npm\claude.cmd`; that
+  folder is not on the Bash tool PATH (add `/c/Users/shank/AppData/Roaming/npm`) for M9.
+- Ollama 0.34.1 on Windows with `qwen2.5-coder:7b` and `qwen3:14b` pulled; CPU only (Intel
+  Arc iGPU, 32 GB RAM).
 - Python 3.13 + uv 0.12 on Windows; `mcp` SDK is 2.2.0: `mcp.server.mcpserver.MCPServer`,
   `ToolError` in `mcp.server.mcpserver.exceptions`, `run("streamable-http", host=, port=,
   transport_security=)`, low-level server `._lowlevel_server`, client
@@ -102,9 +110,16 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - Long lab tests: `pytest -q` prints nothing until the end. Launch them detached
   (`nohup uv run pytest ... > ~/.nettwin/logs/x.log &`) and watch the log; a Bash tool call
   cannot block that long.
-- This desktop session (opened in the OneDrive folder, moved with change_directory) never
-  loaded the project `.mcp.json` servers, so `/diagnose` could not be exercised from it.
-  Sessions opened in the repo do load them.
+- A Claude Code session must be opened in the repo for `.mcp.json` to load; if the servers are
+  down at session start the user reconnects them with `/mcp` (the reconnect tool only handles
+  claude.ai connectors). While a session holds MCP connections, `make stop-serve` hangs on
+  uvicorn shutdown: wait 10 s then `pkill -9 -f '[t]winlab-server'` (same for netverify).
+- Lab config files are bind-mounted into the containers; after editing anything under
+  `lab/configs/` run `nettwin lab up` (redeploy), not just `make sync` + `make golden`, or the
+  container keeps the old inode.
+- OSPF probes: when only one side stops receiving hellos, the other side keeps the neighbour
+  in Init, so probe `show ip ospf neighbor ethN` with `absent: "Full"` rather than the
+  neighbour id.
 
 ## Decisions the user confirmed
 
@@ -123,11 +138,9 @@ golden scripts flush route caches; snapshot ids exclude routes (derived) and bri
 
 ## Next milestones
 
-- M7 done once PR #9 is merged. Lessons: a Claude Code session must be opened in the repo for
-  `.mcp.json` to load, and if the servers are down at session start the user reconnects them
-  with `/mcp` (the reconnect tool only handles claude.ai connectors); the desktop app did not
-  present MCP elicitation, so approvals go through `nettwin approve <id>`; the harness's
-  manual runner waits 3 min for that decision and scores a pending bundle as exported.
+- M7 and M8 are merged. The desktop app did not present MCP elicitation, so approvals go
+  through `nettwin approve <id>`; the harness's manual runner waits 3 min for that decision
+  and scores a pending bundle as exported.
 - M8 tier B/C scenarios 015–020 (VLAN access/trunk/subinterface tag; nft ACL order, NAT,
   proto-89 filter) plus two-fault and no-fault control.
 - M9 `runners/claude_cli.py`: `claude -p "/diagnose <symptom>" --output-format stream-json

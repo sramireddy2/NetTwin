@@ -39,16 +39,24 @@ class Probe(BaseModel):
 class Scenario(BaseModel):
     id: str = Field(pattern=SCENARIO_ID_PATTERN)
     title: str
-    tier: Literal["A", "B", "C", "stretch"]
+    tier: Literal["A", "B", "C", "stretch", "control"]
     layer: Layer
     symptom: str
     inject: dict[str, list[Op]]
-    ground_truth: GroundTruth
+    #: None for a control scenario: the right answer is "nothing is wrong".
+    ground_truth: GroundTruth | None = None
+    #: Further faults planted at the same time (stretch scenarios). A reported cause that
+    #: matches any planted fault counts; a verified fix has to remove all of them.
+    extra_causes: list[GroundTruth] = Field(default_factory=list)
     expected_fix: dict[str, list[Op]]
     expected_failed_rules: list[str] = Field(default_factory=list)
     probe: Probe | None = None
     policy: str = "lab/policy/intent.yaml"
     notes: str = ""
+
+    @property
+    def causes(self) -> list[GroundTruth]:
+        return ([self.ground_truth] if self.ground_truth else []) + list(self.extra_causes)
 
     @field_validator("inject", "expected_fix")
     @classmethod

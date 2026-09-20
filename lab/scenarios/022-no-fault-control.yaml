@@ -1,0 +1,17 @@
+id: 022-no-fault-control
+title: Control, nothing is wrong
+tier: control
+layer: host
+symptom: >
+  NOC ticket: a user on VLAN 10 says the file server "felt slow" this morning and asks
+  whether the network changed. Monitoring shows every adjacency up and every probe green.
+  Check the network and report; change something only if you find a real fault.
+inject: {}
+ground_truth: null
+expected_fix: {}
+expected_failed_rules: []
+probe: null
+notes: >
+  The correct outcome is no root cause and no change. Root cause scores when the agent
+  reports none, minimal scores when nothing was applied, verified scores when intent_check
+  passes on the untouched twin, and nothing is exported.

@@ -1,0 +1,37 @@
+id: 017-vlan-subinterface-tag
+title: Guest gateway sub-interface tagged with the wrong VLAN id
+tier: B
+layer: L2
+symptom: >
+  NOC ticket: guest users on VLAN 20 lost their default gateway after the VLAN gateway
+  router was reconfigured. The switch trunk was not touched and the router still shows the
+  gateway address configured. Corporate VLAN 10 is fine.
+inject:
+  r3:
+    - kind: del_vlan
+      name: eth3.20
+    - kind: add_vlan
+      parent: eth3
+      vlan_id: 21
+      name: eth3.20
+    - kind: set_addr
+      iface: eth3.20
+      address: 10.0.20.1/24
+ground_truth:
+  node: r3
+  layer: L2
+  component: vlan.subinterface
+  summary: r3 eth3.20 carries 802.1Q id 21 instead of 20, so tagged guest frames from the trunk are never delivered to the gateway interface
+expected_fix:
+  r3:
+    - kind: del_vlan
+      name: eth3.20
+    - kind: add_vlan
+      parent: eth3
+      vlan_id: 20
+      name: eth3.20
+    - kind: set_addr
+      iface: eth3.20
+      address: 10.0.20.1/24
+expected_failed_rules: [guest-to-inet]
+probe: {node: h20, cmd: ping -c 1 -W 1 10.0.20.1, expect: fail}

@@ -45,16 +45,26 @@ def score_run(
     golden_probes: list[dict[str, Any]],
     after_probes: list[dict[str, Any]],
 ) -> Score:
-    gt = scenario.ground_truth
+    causes = scenario.causes
     rc = output.root_cause
-    node_ok = rc is not None and rc.node == gt.node
-    component_ok = rc is not None and rc.component == gt.component
+    if not causes:
+        # Control scenario: the right answer is that nothing is wrong.
+        node_ok = component_ok = rc is None
+    else:
+        node_ok = rc is not None and any(rc.node == c.node for c in causes)
+        component_ok = rc is not None and any(
+            rc.node == c.node and rc.component == c.component for c in causes
+        )
     golden, after = probe_map(golden_probes), probe_map(after_probes)
     collateral = sorted(rule for rule, ok in golden.items() if rule in after and after[rule] != ok)
     nodes = sorted({c.node for c in changes})
     ops_applied = sum(len(c.ops) for c in changes)
     ops_expected = sum(len(ops) for ops in scenario.expected_fix.values())
     expected_nodes = set(scenario.expected_fix)
+    if expected_nodes:
+        minimal = bool(changes) and set(nodes) <= expected_nodes and ops_applied <= ops_expected
+    else:
+        minimal = not changes
     verified = bool(output.verification and output.verification.passed)
     exported = bool(output.export and output.export.get("status") in ("approved", "pending"))
     return Score(
@@ -67,6 +77,6 @@ def score_run(
         nodes_touched=nodes,
         ops_applied=ops_applied,
         ops_expected=ops_expected,
-        minimal=bool(changes) and set(nodes) <= expected_nodes and ops_applied <= ops_expected,
+        minimal=minimal,
         exported=exported,
     )

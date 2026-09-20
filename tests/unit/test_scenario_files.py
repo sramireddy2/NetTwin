@@ -30,15 +30,35 @@ def test_scenario_ids_are_unique_and_sequential() -> None:
 def test_scenario_is_consistent(scenario: Scenario) -> None:
     for node in (*scenario.inject, *scenario.expected_fix):
         assert node in TOPOLOGY.nodes, node
-    assert scenario.ground_truth.node in TOPOLOGY.nodes
-    assert scenario.inject and scenario.expected_fix
+    assert "NOC ticket" in scenario.symptom
+    assert set(scenario.expected_failed_rules) <= RULE_IDS, scenario.expected_failed_rules
+    if scenario.tier == "control":
+        assert not scenario.inject and not scenario.expected_fix and not scenario.causes
+        assert scenario.probe is None and not scenario.expected_failed_rules
+        return
+    assert scenario.causes and scenario.inject and scenario.expected_fix
+    assert scenario.expected_failed_rules
+    for cause in scenario.causes:
+        assert cause.node in TOPOLOGY.nodes
+        assert cause.node in scenario.expected_fix, "every planted fault gets fixed"
+        assert cause.component not in scenario.symptom
+    assert len(scenario.extra_causes) == (1 if scenario.tier == "stretch" else 0)
     for ops in (*scenario.inject.values(), *scenario.expected_fix.values()):
         for op in ops:
+            if (
+                getattr(op, "kind", "") == "nft_rule"
+                and op.action == "delete"
+                and op.handle is None
+            ):
+                continue  # handle is resolved on the node at apply time
             assert render(op)
-    assert set(scenario.expected_failed_rules) <= RULE_IDS, scenario.expected_failed_rules
     assert scenario.probe is not None
     assert scenario.probe.node in TOPOLOGY.nodes
     check(scenario.probe.cmd)
     assert (scenario.probe.contains is None) or (scenario.probe.absent is None)
-    assert "NOC ticket" in scenario.symptom
-    assert scenario.ground_truth.component not in scenario.symptom
+
+
+def test_tiers_are_all_represented() -> None:
+    tiers = {s.tier for s in SCENARIOS}
+    assert tiers == {"A", "B", "C", "stretch", "control"}
+    assert len(SCENARIOS) == 22

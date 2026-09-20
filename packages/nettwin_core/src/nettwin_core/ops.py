@@ -125,7 +125,12 @@ class BridgeVlan(BaseModel):
 
 
 class NftRule(BaseModel):
-    """Add, insert, delete or flush nftables rules. Data-plane ACLs and NAT live here."""
+    """Add, insert, delete or flush nftables rules. Data-plane ACLs and NAT live here.
+
+    `delete` takes either the rule handle or the rule text; with only the text, the apply
+    engine lists the chain with handles and resolves the matching rule at execution time,
+    because handles are assigned by the kernel and cannot be known in advance.
+    """
 
     kind: Literal["nft_rule"] = "nft_rule"
     action: Literal["add", "insert", "delete", "flush_chain"]
@@ -157,8 +162,8 @@ class NftRule(BaseModel):
     def _check_shape(self) -> NftRule:
         if self.action in ("add", "insert") and not self.rule:
             raise ValueError(f"{self.action} needs a rule")
-        if self.action == "delete" and self.handle is None:
-            raise ValueError("delete needs a handle")
+        if self.action == "delete" and self.handle is None and not self.rule:
+            raise ValueError("delete needs a handle or the rule text to look one up")
         if self.action == "flush_chain" and (self.rule or self.handle is not None):
             raise ValueError("flush_chain takes neither rule nor handle")
         return self
@@ -236,6 +241,8 @@ def render(op: Op) -> list[list[str]]:
         if op.action == "flush_chain":
             return [["nft", "flush", "chain", *location]]
         if op.action == "delete":
+            if op.handle is None:
+                raise ValueError("nft delete: resolve the handle from the rule text first")
             return [["nft", "delete", "rule", *location, "handle", str(op.handle)]]
         argv = ["nft", op.action, "rule", *location]
         if op.index is not None:

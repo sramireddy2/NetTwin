@@ -1,0 +1,29 @@
+id: 020-nft-ospf-filter
+title: Host firewall on the VLAN gateway drops OSPF from the core
+tier: C
+layer: policy
+symptom: >
+  NOC ticket: r2 lost its OSPF adjacency to r3 minutes after a "firewall hardening" change
+  on r3. The interface and OSPF configuration on both routers are unchanged and the link
+  passes pings. The access layer is now single-homed through r1.
+inject:
+  r3:
+    - kind: nft_rule
+      action: add
+      table: fw
+      chain: input
+      rule: iifname eth2 ip protocol 89 drop
+ground_truth:
+  node: r3
+  layer: policy
+  component: nft.filter
+  summary: an input-chain rule on r3 drops OSPF (IP protocol 89) arriving on eth2, so hellos from r2 never reach ospfd and the adjacency dies
+expected_fix:
+  r3:
+    - kind: nft_rule
+      action: delete
+      table: fw
+      chain: input
+      rule: iifname eth2 ip protocol 89 drop
+expected_failed_rules: [ospf-r2-eth2, ospf-r3-eth2]
+probe: {node: r2, cmd: show ip ospf neighbor eth2, absent: "Full"}

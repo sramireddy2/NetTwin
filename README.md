@@ -44,7 +44,7 @@ flowchart TB
 
 - **Networking.** OSPF, BGP, VLANs, MTU, NAT and packet filters on real routing software (FRRouting on Linux), not a simulation.
 - **MCP as a safety boundary.** Two MCP servers with separate responsibilities. `twinlab` owns the twin and every mutation through typed, validated tools. `netverify` owns judgement and has no write tools at all. The human approval gate is an MCP elicitation raised by the server, so the agent cannot talk its way past it. Fault injection lives on an admin route the agent cannot reach.
-- **Agents, measured.** A commander, three parallel layer investigators, a change agent, and a verifier that runs in a fresh context and only ever sees before and after state plus the intent policy. NetBench plants about 20 faults and scores root cause, verified fix, and collateral damage across single vs multi-agent, verifier on vs off, and across models.
+- **Agents, measured.** A commander, three parallel layer investigators, a change agent, and a verifier that runs in a fresh context and only ever sees before and after state plus the intent policy. NetBench plants 22 scenarios (OSPF, BGP, MTU and addressing faults, VLAN faults on the switch and the gateway, nftables rule-order, NAT and host-firewall faults, a two-fault stretch and a no-fault control) and scores root cause, verified fix, collateral damage and minimality across single vs multi-agent, verifier on vs off, and across models.
 
 ## Status
 
