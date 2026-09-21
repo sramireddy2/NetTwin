@@ -40,6 +40,7 @@ DEFAULT_ALLOWED_TOOLS = (
     "ListMcpResourcesTool",
 )
 STREAM_LINE_LIMIT = 16 * 1024 * 1024
+KILL_GRACE = 60.0
 _REPORT_RE = re.compile(r"\{\s*\"root_cause\"\s*:.*\}", re.DOTALL)
 #: Errors that mean the CLI, not the agent, failed: stop the matrix rather than score them.
 _UNAVAILABLE_RE = re.compile(
@@ -258,29 +259,26 @@ async def spawn_cli(
         assert proc.stderr is not None
         return (await proc.stderr.read()).decode("utf-8", "replace")
 
-    # A watchdog kills the whole tree at the deadline. Cancelling the pipe reads instead
-    # (wait_for) blocks on Windows until every child closes the pipe, which is exactly what
-    # a hung subagent never does; killing the tree closes the pipes and the drains finish.
-    deadline_hit = False
-
-    async def watchdog() -> None:
-        nonlocal deadline_hit
-        await asyncio.sleep(timeout)
-        deadline_hit = True
-        await kill_tree(proc)
-
-    guard = asyncio.create_task(watchdog())
-    try:
-        _, _, stderr = await asyncio.gather(feed(), drain_stdout(), drain_stderr())
+    # Cancelling the pipe reads (wait_for) blocks on Windows until every child closes the
+    # pipe, which a hung subagent never does. So: wait with a deadline, kill the whole tree,
+    # give the drains a grace period, then return what was read even if a straggler still
+    # holds the pipe.
+    work = asyncio.ensure_future(asyncio.gather(feed(), drain_stdout(), drain_stderr()))
+    done, _ = await asyncio.wait({work}, timeout=timeout)
+    if work in done:
+        stderr = work.result()[2]
         rc = await proc.wait()
-    finally:
-        if not guard.done():
-            guard.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await guard
-    if deadline_hit:
-        rc, stderr = -1, f"killed after {timeout:.0f}s"
-    return rc, lines, stderr
+        return rc, lines, stderr
+    await kill_tree(proc)
+    done, _ = await asyncio.wait({work}, timeout=KILL_GRACE)
+    if work not in done:
+        work.add_done_callback(_swallow)
+    return -1, list(lines), f"killed after {timeout:.0f}s"
+
+
+def _swallow(task: asyncio.Future[Any]) -> None:
+    with contextlib.suppress(BaseException):
+        task.result()
 
 
 async def kill_tree(proc: asyncio.subprocess.Process) -> None:
@@ -364,6 +362,14 @@ class ClaudeCliRunner:
             failure = f"{summary.error or ''} {summary.final_text}".strip()
             if _UNAVAILABLE_RE.search(failure) or _UNAVAILABLE_RE.search(stderr):
                 raise RunnerUnavailable(f"claude CLI unavailable: {failure[:200]}")
+        if rc == -1:
+            # A hung CLI is a runtime failure, recorded as an error so it is not confused
+            # with the agent getting the network wrong. Transcript and partial state stay.
+            raise RunTimeout(
+                f"claude -p killed after {self.timeout:.0f}s with {len(summary.tool_uses)} "
+                f"tool calls and {len(summary.agents_launched)} agents launched; last event "
+                f"{_last_timestamp(lines) or 'unknown'}"
+            )
         report = extract_report(summary.final_text)
 
         new = [e for e in await self.admin.exports() if e["export_id"] not in seen]
@@ -443,6 +449,21 @@ def coerce_root_cause(candidate: Any) -> RootCause | None:
         return RootCause.model_validate(fixed)
     except ValidationError:
         return None
+
+
+class RunTimeout(RuntimeError):
+    """The CLI did not finish within the wall-clock budget and was killed."""
+
+
+def _last_timestamp(lines: list[str]) -> str | None:
+    for line in reversed(lines):
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("timestamp"):
+            return str(event["timestamp"])
+    return None
 
 
 def _root_cause_from(

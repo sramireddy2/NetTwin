@@ -10,6 +10,7 @@ import pytest
 from netbench.admin import CallableAdmin
 from netbench.claude_cli import (
     ClaudeCliRunner,
+    RunTimeout,
     extract_report,
     find_claude,
     parse_stream,
@@ -176,16 +177,15 @@ async def test_run_stops_the_matrix_when_the_cli_is_unavailable(tmp_path: Path) 
         await runner.run(_ctx())
 
 
-async def test_run_records_a_timeout_as_an_empty_output(tmp_path: Path) -> None:
+async def test_run_raises_a_timeout_as_a_runtime_error(tmp_path: Path) -> None:
     async def killed(
         argv: list[str], stdin: str, cwd: Path, timeout: float
     ) -> tuple[int, list[str], str]:
-        return -1, TEAM[:3], "killed after 5s"
+        return -1, TEAM[:6], "killed after 5s"
 
     runner = ClaudeCliRunner(CallableAdmin(_inject, dict), cli="c", cwd=tmp_path, spawn=killed)
-    out = await runner.run(_ctx())
-    assert out.root_cause is None and out.change_ids == []
-    assert "timed_out" in out.notes and "rc=-1" in out.notes
+    with pytest.raises(RunTimeout, match="killed after"):
+        await runner.run(_ctx())
 
 
 def test_final_text_prefers_the_last_main_thread_message() -> None:

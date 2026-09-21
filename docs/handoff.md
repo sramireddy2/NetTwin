@@ -68,8 +68,12 @@ base branch was deleted, so it was re-opened as #7):
   First batch (`claude-diagnose-sonnet-p0`, 001-008) recorded in `results/v1` and analysed in
   lab-notes: verifier prompt revised to p1 (verdict follows intent_check, route_diff against
   the converged snapshot), `restored_golden` score added, watchdog tree-kill on timeout,
-  baseline guard against a planted twin. Next: run `claude-diagnose-sonnet` (p1) over all 22,
-  then `--no-verifier`, then `--skill diagnose-solo` with and without verifier.
+  baseline guard against a planted twin. p1 batch (row `claude-diagnose-sonnet`) reached 009
+  before WSL wedged; 001-005, 008, 009 clean with golden restored, 006 work-around again,
+  007 lost to a CLI hang mid-fix (RunTimeout), 010 lost to the WSL wedge (no row). Resume with
+  the same command (resumable by run id) after `nettwin lab up` + `make -C lab serve-bench`;
+  then `--no-verifier`, then `--skill diagnose-solo` with and without verifier. Timeouts are
+  now recorded as errors; `no ipv6 forwarding` is pinned in the golden FRR configs.
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
@@ -134,10 +138,14 @@ results land in `results/<matrix>/runs.jsonl` and a re-run skips run ids already
 - OSPF probes: when only one side stops receiving hellos, the other side keeps the neighbour
   in Init, so probe `show ip ospf neighbor ethN` with `absent: "Full"` rather than the
   neighbour id.
-- Headless runs: `claude -p` can hang when a subagent's API call stalls; the runner kills the
-  process tree at `--run-timeout` (default 25 min). Stopping a batch mid-run leaves a fault
+- Headless runs: `claude -p` hangs when a subagent's call stalls or when WSL (and with it the
+  MCP servers) goes away; the runner kills the process tree at `--run-timeout` (default 25 min),
+  waits 60 s for the pipes, records a RunTimeout error and moves on.
+- WSL2 wedged twice on 2026-09-20 (HCS_E_CONNECTION_TIMEOUT at start, Wsl/Service/0x8007274c
+  after ~2 h of headless runs): `wsl --shutdown`, then `nettwin lab up`, then serve-bench. Stopping a batch mid-run leaves a fault
   planted: run `nettwin lab golden` before the next batch (the harness refuses a baseline that
-  differs from the matrix's golden id). Transcripts are named
+  differs from the matrix's golden id; `no ipv6 forwarding` is pinned in the golden FRR configs
+  so `make golden` and `lab up` agree on that id, e4a6c253d114 as of 2026-09-20). Transcripts are named
   `<scenario>.<config>.<trial>.jsonl` under `results/<matrix>/transcripts/`.
 
 ## Decisions the user confirmed

@@ -355,3 +355,8 @@ relabelled `-p0` and `restored_golden` was filled in from each run's verificatio
 - One more guard from the same batch: stopping the batch mid-run left a fault planted, and
   the next baseline would have adopted it as golden. The harness now refuses a baseline
   whose snapshot differs from the golden id the matrix's earlier rows were scored against.
+  Its first catch was the lab itself: `make golden` reloaded FRR configs without
+  `no ipv6 forwarding`, so it silently enabled IPv6 forwarding on every router and the
+  content-addressed snapshot differed from a fresh deployment by exactly that line. The line
+  is now pinned in the golden configs; `nettwin lab up` and `nettwin lab golden` both land on
+  the same snapshot id.
