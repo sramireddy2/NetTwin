@@ -7,6 +7,7 @@ golden matrix taken before any fault was planted.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -50,6 +51,15 @@ def probe_map(probes: list[dict[str, Any]]) -> dict[str, bool]:
     return {p["rule_id"]: bool(p["ok"]) for p in probes}
 
 
+_NODE_TOKEN = re.compile(r"[a-z][a-z0-9-]*")
+
+
+def node_token(text: str) -> str:
+    """The node an agent named, even when it wrote prose such as `r2 (also r4)`."""
+    match = _NODE_TOKEN.search(text.strip().lower())
+    return match.group(0) if match else text.strip()
+
+
 def score_run(
     scenario: Scenario,
     output: RunOutput,
@@ -65,9 +75,10 @@ def score_run(
         # Control scenario: the right answer is that nothing is wrong.
         node_ok = component_ok = rc is None
     else:
-        node_ok = rc is not None and any(rc.node == c.node for c in causes)
+        node = node_token(rc.node) if rc is not None else None
+        node_ok = node is not None and any(node == c.node for c in causes)
         component_ok = rc is not None and any(
-            rc.node == c.node and rc.component == c.component for c in causes
+            node == c.node and rc.component == c.component for c in causes
         )
     golden, after = probe_map(golden_probes), probe_map(after_probes)
     collateral = sorted(rule for rule, ok in golden.items() if rule in after and after[rule] != ok)

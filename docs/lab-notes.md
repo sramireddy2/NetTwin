@@ -360,3 +360,37 @@ relabelled `-p0` and `restored_golden` was filled in from each run's verificatio
   content-addressed snapshot differed from a fresh deployment by exactly that line. The line
   is now pinned in the golden configs; `nettwin lab up` and `nettwin lab golden` both land on
   the same snapshot id.
+
+### Prompt revision 1: the team row is complete
+
+Sonnet 5, `/diagnose` (three investigators, change agent, isolated verifier), verifier on,
+all 22 scenarios, recorded as row `claude-diagnose-sonnet` in `results/v1/runs.jsonl`:
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet | 22 | 91% | 95% | 91% | 95% | 95% | 1 | 393 | 82% |
+
+- 18 of 22 scenarios scored on every axis with the golden state restored, including all six
+  VLAN and nftables faults and the no-fault control, which reported no cause and changed
+  nothing (its `verified` is false only because there was nothing to verify).
+- 006, twice out of twice: the agent adds a prefix-list entry that redistributes the server
+  subnet instead of putting back the removed `network` statement. Fix correct, verified, one
+  op, not the planted cause, not golden. A consistent preference, not a slip.
+- 007: the CLI hung just as the change agent started applying; killed at 25 min and recorded
+  as the row's one error, with the fault still planted. Under p0 the same scenario had been
+  diagnosed and fixed correctly and then vetoed by the old verifier, so 007 has still not
+  produced a clean run.
+- 019: right cause and an equivalent fix, `ip saddr 10.0.20.0/24 oifname eth3 masquerade`
+  where golden reads `oifname "eth3" ip saddr 10.0.20.0/24 masquerade`. nft prints the clauses
+  in the order given, so the content-addressed snapshot differs. `restored_golden` is textual;
+  for nftables that is a known limitation.
+- 021, two faults: both fixed (the MTU restored, the BGP half through the same prefix-list
+  work-around), root cause written as `r2 (also r4)`. The scorer now takes the first node-like
+  token of what the agent wrote, so the MTU cause counts; the row is not golden because of the
+  BGP work-around.
+- Runtime: median 205 s per run (153 to 1296), 5 subagents and about 55 tool calls per run,
+  about 209 k cache-read and 3.2 k output tokens per run; the CLI's own price estimate for the
+  21 completed runs is $14 had they been paid per token (they ran on the subscription). Two
+  WSL wedges and one CLI stall interrupted the batch; `RunTimeout` errors and resumable run
+  ids kept the row consistent, and the baseline guard caught an IPv6-forwarding drift in
+  `make golden` before it could contaminate a run.

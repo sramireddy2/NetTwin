@@ -68,12 +68,15 @@ base branch was deleted, so it was re-opened as #7):
   First batch (`claude-diagnose-sonnet-p0`, 001-008) recorded in `results/v1` and analysed in
   lab-notes: verifier prompt revised to p1 (verdict follows intent_check, route_diff against
   the converged snapshot), `restored_golden` score added, watchdog tree-kill on timeout,
-  baseline guard against a planted twin. p1 batch (row `claude-diagnose-sonnet`) reached 009
-  before WSL wedged; 001-005, 008, 009 clean with golden restored, 006 work-around again,
-  007 lost to a CLI hang mid-fix (RunTimeout), 010 lost to the WSL wedge (no row). Resume with
-  the same command (resumable by run id) after `nettwin lab up` + `make -C lab serve-bench`;
-  then `--no-verifier`, then `--skill diagnose-solo` with and without verifier. Timeouts are
-  now recorded as errors; `no ipv6 forwarding` is pinned in the golden FRR configs.
+  baseline guard against a planted twin. The p1 team row (`claude-diagnose-sonnet`) is complete:
+  22 runs, root cause 91 %, fix correct 95 %, verified 91 %, golden 82 %, 1 error (007 CLI
+  hang), median 205 s; 006 and 021 use a prefix-list work-around for the missing BGP network,
+  019 restores NAT with the clauses in another order (not golden by text). Still to run for v1:
+  the same command with `--no-verifier` (row claude-diagnose-sonnet-noverify), then
+  `--skill diagnose-solo` with and without `--no-verifier`. Each row is about 22 x 4 min plus
+  hangs; runs are resumable by run id. Timeouts are recorded as errors; `no ipv6 forwarding`
+  is pinned in the golden FRR configs; the scorer takes the first node-like token of a
+  prose node name.
 
 Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback byte-identical
 (4 m 13 s); verifier fails exactly each scenario's expected rules, golden passes with attestation
