@@ -166,3 +166,19 @@ async def test_fake_agent_is_honest_on_the_control_scenario(tmp_path: Path) -> N
     tools = [c.tool for c in record.output.tool_calls]
     assert "apply_config" not in tools and "export_change" not in tools
     assert "intent_check" in tools
+
+
+def test_root_cause_node_accepts_prose_around_the_node_name() -> None:
+    from netbench.scoring import node_token
+
+    assert node_token("r2 (also r4)") == "r2"
+    assert node_token("  R4  ") == "r4"
+    assert node_token("sw1: access port") == "sw1"
+    golden = [{"rule_id": "a", "ok": True}]
+    out = RunOutput(
+        root_cause=RootCause(node="r2 (also r4)", layer="L2", component="link.mtu", summary="s"),
+        change_ids=[],
+        verification=_report(True),
+    )
+    score = score_run(TWO_FAULTS, out, [], golden, golden)
+    assert score.root_cause_node and score.root_cause_component and score.root_cause
