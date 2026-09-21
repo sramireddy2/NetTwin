@@ -111,8 +111,8 @@ Matrix v1 (Sonnet 5, results/v1/runs.jsonl, golden id e4a6c253d114):
 | claude-diagnose-sonnet-p0 | 8 | 75 % | 88 % | 75 % | 83 % | 861 | 1 |
 | claude-diagnose-sonnet (team, verifier) | 22 | 91 % | 95 % | 91 % | 82 % | 393 | 1 |
 | claude-diagnose-sonnet-noverify | 22 | 82 % | 95 % | 0 % | 82 % | 152 | 0 |
-| claude-diagnose-solo-sonnet | running | | | | | | |
-| claude-diagnose-solo-sonnet-noverify | owed: `uv run netbench run --runner claude --model sonnet --skill diagnose-solo --scenarios all --matrix v1 --no-verifier` |
+| claude-diagnose-solo-sonnet | 22 | 82 % | 95 % | 91 % | 77 % | 225 | 1 (018 RunTimeout) |
+| claude-diagnose-solo-sonnet-noverify | RUNNING since 17:35 local 2026-09-21 from the previous chat's background task: `uv run netbench run --runner claude --model sonnet --skill diagnose-solo --scenarios all --matrix v1 --no-verifier`; if it died, `nettwin lab golden` then the same command resumes by run id |
 
 Findings of the verifier-off row (details in lab-notes): median 150 s, no hangs (both CLI
 hangs of the verifier-on rows were inside the verifier subagent). 019 is the headline: the
@@ -123,6 +123,17 @@ and reported done; only the harness-side fix_correct/collateral_free caught it. 
 and changed nothing. 021 led with the BGP half (r4 bgp.prefix_list) so root cause missed.
 006 took the prefix-list work-around a third time. 007 got its first clean run but bundled
 two extra lines into the op (not golden).
+
+Solo row (verifier on) is complete and committed (8aded21, pushed): 22 runs, median 131 s, misses are 001 (blamed r1 for r3's area mismatch and changed r1 to match: fix correct, not the planted cause, not golden), 006 (prefix-list work-around, now 4 of 4 across rows), 019 (right cause, NAT clause order differs from golden), 021 (led with the BGP half), and 018 (RunTimeout: the solo agent hung after 9 tool calls, killed at 1500 s). Write the solo analysis into lab-notes next to the ablation section before opening the results PR. Earlier in the row the harness crashed once: 10 runs recorded (001-010) before at 16:15 local on
+2026-09-21: after the agent had fixed and exported 011, the harness's own post-run
+`reachability_matrix` / `intent_check` on netverify exceeded its MCP timeout (`MCPError:
+Request 'tools/call' timed out`, harness.py run_one lines 174-177) and the batch exited 1
+without recording 011. Servers and containers were healthy afterwards (slow probes, not a
+wedge). Fix to make (small, in the results branch or its own PR): wrap the post-run scoring
+calls in run_one so a timeout records an error record for that run, resets, and continues,
+instead of killing the batch. Meanwhile the row was reset with `nettwin lab golden` and
+relaunched with the same command (resumes at 011). Solo results so far: 001 and 006 not root
+cause / not golden (001 solo: RC False, FIX True, VER True), the other eight clean.
 
 Resume procedure (every new chat): `wsl -d Containerlab -- sleep infinity` in the background,
 `uv run nettwin lab up` (34 s, all checks pass, lands on e4a6c253d114), then in WSL
