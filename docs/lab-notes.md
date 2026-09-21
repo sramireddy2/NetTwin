@@ -394,3 +394,43 @@ all 22 scenarios, recorded as row `claude-diagnose-sonnet` in `results/v1/runs.j
   WSL wedges and one CLI stall interrupted the batch; `RunTimeout` errors and resumable run
   ids kept the row consistent, and the baseline guard caught an IPv6-forwarding drift in
   `make golden` before it could contaminate a run.
+
+### Ablation: the team without its verifier
+
+Same skill, same model, `--no-verifier` (the commander skips steps 5 and 6: no verifier
+subagent, no export), all 22 scenarios, row `claude-diagnose-sonnet-noverify`:
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet | 22 | 91% | 95% | 91% | 95% | 95% | 1 | 393 | 82% |
+| claude-diagnose-sonnet-noverify | 22 | 82% | 95% | 0% | 95% | 100% | 0 | 152 | 82% |
+
+- Faster and never stuck: median 150 s (84 to 312), mean 152 s against 393 s, no errors in
+  22 runs. Both CLI hangs of the verifier-on rows happened inside the verifier subagent, so
+  removing it also removed the row's only failure mode. About 48 tool calls and 218 k
+  cache-read tokens per run; $11.48 by the CLI's own price estimate for the whole row.
+- 17 of 22 scored on every axis with the golden state restored, including five of the six
+  VLAN and nftables faults.
+- 019 (guest NAT missing on r3) is what the ablation exists to show. The team blamed r4's
+  prefix-list, added `permit 10.0.20.0/24` to it so the guest subnet would be redistributed
+  into BGP and advertised to the ISP, and reported the incident closed. That is the route
+  leak the intent policy forbids (`no_route_leak`), applied as a fix: wrong node, wrong
+  layer, the fault still planted and collateral on the ISP. With the verifier on, the same
+  scenario was diagnosed correctly; had this change been proposed there, `intent_check`
+  would have failed it and forced the rollback-and-retry loop. Without the verifier there is
+  no loop and no gate. `fix_correct` and `collateral_free` are what caught it, and they run
+  in the harness, not in the agent.
+- 022 (no fault): the team reported a cause, transient flaps on r2's links "this morning",
+  read from the interface counters and logs left by the day's earlier injections and
+  rollbacks, and changed nothing. Scored as a wrong root cause (a control expects none),
+  correct fix and golden. The verifier-on run of the same control reported no cause. It is
+  a fair reading of the twin's history, and a reminder that a benchmark reusing one twin
+  leaves footprints the agent can see.
+- 021 (two faults): the MTU on r2 restored and the BGP half worked around through the
+  prefix-list again, but this time the report led with the BGP half (r4, bgp.prefix_list),
+  so the root cause does not match. Under the verifier the same scenario was written as
+  `r2 (also r4)` and scored.
+- 006, a third time: the prefix-list entry instead of the network statement. 007: the right
+  route-map line restored, plus a prefix-list entry and a match clause on TO-ISP bundled
+  into the same op; one op, minimal by count, not golden. The first clean 007 run of the
+  matrix, and an over-fix the verifier-on row did not show.
