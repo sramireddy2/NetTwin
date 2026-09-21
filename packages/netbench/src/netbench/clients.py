@@ -17,7 +17,7 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.mcpserver import MCPServer
 from mcp.shared.memory import create_client_server_memory_streams
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, Tool
 
 
 @dataclass(frozen=True)
@@ -73,6 +73,10 @@ class ToolClient:
     async def read_resource(self, uri: str) -> str:
         body = await self.session.read_resource(uri)
         return "".join(getattr(c, "text", "") for c in body.contents)
+
+    async def list_tools(self) -> list[Tool]:
+        """The server's tool definitions, so a runner can hand them to a model as functions."""
+        return (await self.session.list_tools()).tools
 
 
 @asynccontextmanager
