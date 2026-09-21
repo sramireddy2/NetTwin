@@ -112,7 +112,8 @@ Matrix v1 (Sonnet 5, results/v1/runs.jsonl, golden id e4a6c253d114):
 | claude-diagnose-sonnet (team, verifier) | 22 | 91 % | 95 % | 91 % | 82 % | 393 | 1 |
 | claude-diagnose-sonnet-noverify | 22 | 82 % | 95 % | 0 % | 82 % | 152 | 0 |
 | claude-diagnose-solo-sonnet | 22 | 82 % | 95 % | 91 % | 77 % | 225 | 1 (018 RunTimeout) |
-| claude-diagnose-solo-sonnet-noverify | RUNNING since 17:35 local 2026-09-21 from the previous chat's background task: `uv run netbench run --runner claude --model sonnet --skill diagnose-solo --scenarios all --matrix v1 --no-verifier`; if it died, `nettwin lab golden` then the same command resumes by run id |
+| claude-diagnose-solo-sonnet-noverify-diagonly | 22 | 91 % | 5 % | 0 % | 5 % | 75 | 0 (skill-text defect: 0 ops applied, kept as evidence) |
+| claude-diagnose-solo-sonnet-noverify | STUCK at 11 of 22 (001-011 recorded, fixed skill applies changes: 9 RC, 10 fix correct). The harness crashed three times in a row at scenario 012 (`MCPError: Request 'tools/call' timed out` in run_one's post-run reachability_matrix/intent_check, harness.py ~174-177, 180 s default). Twin was reset to golden at the end of the chat; batch NOT running. BEFORE resuming: (1) harden run_one: pass timeout=600 to the post-run reachability_matrix and intent_check and wrap them so an MCPError records an error record and continues after reset; (2) look at results/v1/transcripts/012-interface-shutdown.claude-diagnose-solo-sonnet-noverify.1.jsonl (apply_config ops) and, with 012 injected and that fix applied by hand, time netverify reachability_matrix to see which probe hangs; then resume with the same command |
 
 Findings of the verifier-off row (details in lab-notes): median 150 s, no hangs (both CLI
 hangs of the verifier-on rows were inside the verifier subagent). 019 is the headline: the
@@ -123,6 +124,15 @@ and reported done; only the harness-side fix_correct/collateral_free caught it. 
 and changed nothing. 021 led with the BGP half (r4 bgp.prefix_list) so root cause missed.
 006 took the prefix-list work-around a third time. 007 got its first clean run but bundled
 two extra lines into the op (not golden).
+
+Solo no-verifier defect (found 2026-09-21, fixed in 550b14c on bench/v1-ablation-rows): the
+solo skill said "skip steps 4 and 5" for --no-verifier, but in the solo skill step 4 is the
+change (the team skill's flag correctly skips 5 and 6). The agent obeyed: right cause on
+20 of 22, zero changes applied, about a minute per run. Those 22 records were relabelled
+`claude-diagnose-solo-sonnet-noverify-diagonly` (a diagnose-only row, useful as a pure
+diagnosis-accuracy number) and the row is being rerun under the proper name with the fixed
+clause ("still apply the change in step 4, then skip step 5 entirely"). Write this up in
+lab-notes with the solo analysis before opening the results PR.
 
 Solo row (verifier on) is complete and committed (8aded21, pushed): 22 runs, median 131 s, misses are 001 (blamed r1 for r3's area mismatch and changed r1 to match: fix correct, not the planted cause, not golden), 006 (prefix-list work-around, now 4 of 4 across rows), 019 (right cause, NAT clause order differs from golden), 021 (led with the BGP half), and 018 (RunTimeout: the solo agent hung after 9 tool calls, killed at 1500 s). Write the solo analysis into lab-notes next to the ablation section before opening the results PR. Earlier in the row the harness crashed once: 10 runs recorded (001-010) before at 16:15 local on
 2026-09-21: after the agent had fixed and exported 011, the harness's own post-run
