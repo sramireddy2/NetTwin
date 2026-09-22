@@ -307,15 +307,17 @@ async def test_team_mode_runs_each_role_in_a_nested_loop_with_its_own_tools(
             _call("mcp__netverify__intent_check"),
         ),
         verifier_final,
-        # commander: export, then a report without the JSON line
+        # commander: export, then a report without the JSON line, twice nudged, still without
         commander_export,
         _says("Exported. Root cause on r2."),
+        _says("The change is exported; nothing more to add."),
+        _says("Root cause on r2, as reported."),
     )
     async with _servers(tmp_path) as (twin, verify, _):
         out = await _runner(script, "diagnose", tmp_path).run(_ctx(twin, verify))
 
     requests = script.requests
-    assert len(requests) == 12
+    assert len(requests) == 14
     for index in (0, 1, 4, 7, 10, 11):
         assert _tool_names(requests[index]) == COMMANDER_TOOLS, index
     assert requests[1]["messages"][0]["content"].count("incident commander") == 1
@@ -341,7 +343,7 @@ async def test_team_mode_runs_each_role_in_a_nested_loop_with_its_own_tools(
     assert len(out.change_ids) == 1
     assert out.verification is not None and out.verification.passed
     assert out.export is not None and out.export["status"] == "approved"
-    assert "agents=3" in out.notes and "no_final_json" in out.notes
+    assert "agents=3" in out.notes and "no_final_json" in out.notes and "nudges=2" in out.notes
     assert "launched=l2-investigator,change-agent,verifier" in out.notes
     assert [c.tool for c in out.tool_calls] == [
         "snapshot",
@@ -553,3 +555,36 @@ async def test_model_timeout_is_a_run_failure_not_unavailability() -> None:
     with pytest.raises(ModelTimeout):
         await chat.chat([{"role": "user", "content": "hi"}], [])
     assert not issubclass(ModelTimeout, RunnerUnavailable)
+
+
+async def test_empty_or_unfinished_answers_are_nudged_at_most_twice() -> None:
+    from netbench.local_agent import MAX_NUDGES, NUDGE, ToolLoop, Toolset
+
+    final = {
+        "role": "assistant",
+        "content": 'Done. {"root_cause": {"node": "r3"}, "change_ids": []}',
+    }
+    script = ScriptedChat(
+        {"role": "assistant", "content": ""},
+        {"role": "assistant", "content": "Let me think about the next step."},
+        final,
+    )
+    loop = ToolLoop(OllamaChat("m", transport=script), Toolset([]), max_turns=6, expect_report=True)
+    result = await loop.run("system", "user")
+    assert result.nudges == 2 and result.turns == 3 and not result.hit_max_turns
+    assert '"root_cause"' in result.final_text
+    assert [m["content"] for m in script.requests[2]["messages"] if m["role"] == "user"][1:] == [
+        NUDGE,
+        NUDGE,
+    ]
+
+    stubborn = ScriptedChat(*[{"role": "assistant", "content": ""}] * (MAX_NUDGES + 1))
+    loop = ToolLoop(OllamaChat("m", transport=stubborn), Toolset([]), max_turns=6)
+    result = await loop.run("system", "user")
+    assert (
+        result.nudges == MAX_NUDGES and result.final_text == "" and result.turns == MAX_NUDGES + 1
+    )
+
+    prose = ScriptedChat({"role": "assistant", "content": "Findings: eth1 area mismatch on r3."})
+    loop = ToolLoop(OllamaChat("m", transport=prose), Toolset([]), max_turns=6)  # a role loop
+    assert (await loop.run("system", "user")).nudges == 0
