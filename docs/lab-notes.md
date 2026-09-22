@@ -434,3 +434,56 @@ subagent, no export), all 22 scenarios, row `claude-diagnose-sonnet-noverify`:
   route-map line restored, plus a prefix-list entry and a match clause on TO-ISP bundled
   into the same op; one op, minimal by count, not golden. The first clean 007 run of the
   matrix, and an over-fix the verifier-on row did not show.
+
+### Solo baseline: one agent, same tools
+
+`/diagnose-solo` (no subagents, the commander reads, changes, verifies and exports itself),
+Sonnet 5, verifier on, all 22 scenarios, row `claude-diagnose-solo-sonnet`:
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet (team) | 22 | 91% | 95% | 91% | 95% | 95% | 1 | 393 | 82% |
+| claude-diagnose-solo-sonnet | 22 | 82% | 95% | 91% | 95% | 91% | 1 | 225 | 77% |
+
+- Cheaper by half in wall clock (median 131 s against 205 s) and the same fix-correct rate,
+  but two more scenarios end with the fault untouched.
+- 001: the solo agent saw the area mismatch between r1 eth2 and r3 eth1 and moved r1's side
+  into area 0 to match r3, instead of putting r3 back into area 1. The adjacency formed,
+  every rule passed, the verifier signed it, the export went through. Right symptom, right
+  link, wrong end: the design in `lab://topology` says the r1-r3 link is area 1, and the team
+  skill's rule "the faulty end is the one that departs from the design" is what the
+  investigators apply and the solo prompt states but the solo agent did not use.
+- 006: the prefix-list work-around for the missing `network` statement, for the fourth time
+  in four runs across rows. This is now a property of the model on this fault, not of the
+  team layout.
+- 019: right cause, NAT restored with the clauses in another order, so not golden by text;
+  021: both faults fixed (2 ops of 2), report led with the BGP half.
+- 018: the row's error. The agent ran nine read-only show commands over r3, sw1, r2 and h10
+  and then the CLI stalled before any change; killed at 1500 s with the fault planted.
+  Third CLI stall of the matrix, each in a different place (verifier subagent twice, solo
+  investigation once).
+
+### A skill-text defect found by the ablation
+
+The first solo run without the verifier, row `claude-diagnose-solo-sonnet-noverify-diagonly`,
+named the right cause on 20 of 22 scenarios in a median of 63 s and applied exactly zero
+changes. The solo skill said `--no-verifier` skips "steps 4 and 5"; in that skill step 4 is
+the change and step 5 is verify-and-export, while the team skill's identical flag correctly
+skips its steps 5 and 6. The agent followed the text. The 22 records are kept under the
+`-diagonly` name as a pure diagnosis-accuracy number (91 %, the two misses being 006 and 021
+where the prefix-list was blamed), the clause now reads "still apply the change in step 4,
+then skip step 5 entirely", and the row was rerun under its proper name. The harness caught
+this on the first look at the report (fix correct 5 %, minimal 5 %); a benchmark that only
+scored diagnoses would have called it the best row of the matrix.
+
+### Harness: the post-run check is retried
+
+Three batches on the solo rows died at the same point: the agent had finished (in one case
+in 42 s with the golden fix), and the harness's own `reachability_matrix` or `intent_check`
+on netverify then timed out (`MCPError: Request 'tools/call' timed out`), once with the
+client logging that its event stream had dropped and was reconnecting. The fake runner
+passes the same scenario in 24 s, and the netverify server log shows no error, so the fault
+is in the harness's idle MCP session, not the twin. `Harness.post_run_call` now retries
+netverify once after five seconds and, if it fails again, records `HarnessCheckFailed` on
+the run and moves on; `reset()` treats its convergence wait the same way. Unit test in
+`tests/unit/test_netbench.py`.
