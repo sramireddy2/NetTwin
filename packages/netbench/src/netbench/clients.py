@@ -6,10 +6,11 @@ CI and the real servers on the lab host without knowing which.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
-from contextlib import AsyncExitStack, asynccontextmanager, suppress
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -113,38 +114,55 @@ async def memory_session(
 
 
 class HttpToolClient(ToolClient):
-    """A `ToolClient` over streamable HTTP that owns its session and can reopen it.
+    """A `ToolClient` over streamable HTTP whose session lives in its own task.
 
-    The harness's sessions idle while an agent works; the server-to-client event stream
-    drops after about ten minutes of that and the next call can hang. `reconnect()` throws
-    the session away and opens a fresh one, bounded so a wedged transport cannot hold it.
+    anyio cancel scopes must be exited by the task that entered them. A session opened in
+    the harness's task and later abandoned gets finalised from elsewhere and takes the batch
+    down ("Attempted to exit cancel scope in a different task"). So each session is held by
+    a small task that enters the context, waits for a stop signal and exits it itself.
+    `reconnect()` signals the old holder and opens a new one; a holder that hangs on exit is
+    left running and dies with the process.
     """
 
     def __init__(self, url: str, name: str = "server") -> None:
         super().__init__(session=None, name=name)  # type: ignore[arg-type]
         self.url = url
-        self._stack: AsyncExitStack | None = None
-        self._abandoned: list[AsyncExitStack] = []
+        self._holder: asyncio.Task[None] | None = None
+        self._stop: asyncio.Event | None = None
+
+    def _open(self) -> AbstractAsyncContextManager[ClientSession]:
+        return http_session(self.url)
 
     async def connect(self) -> None:
-        stack = AsyncExitStack()
-        self.session = await stack.enter_async_context(http_session(self.url))
-        self._stack = stack
+        loop = asyncio.get_running_loop()
+        ready: asyncio.Future[ClientSession] = loop.create_future()
+        stop = asyncio.Event()
 
-    async def aclose(self) -> None:
-        """Close the live session. Abandoned ones are left to process exit on purpose."""
-        stack, self._stack = self._stack, None
-        if stack is not None:
-            with suppress(Exception):
-                await stack.aclose()
+        async def hold() -> None:
+            try:
+                async with self._open() as session:
+                    ready.set_result(session)
+                    await stop.wait()
+            except BaseException as exc:  # noqa: BLE001 - a wedged transport may raise on exit
+                if not ready.done():
+                    ready.set_exception(exc)
+
+        task = asyncio.create_task(hold(), name=f"mcp-session-{self.name}")
+        self.session = await ready
+        self._holder, self._stop = task, stop
+
+    async def aclose(self, grace: float = 15) -> None:
+        holder, stop, self._holder, self._stop = self._holder, self._stop, None, None
+        if stop is not None:
+            stop.set()
+        if holder is not None:
+            with suppress(BaseException):
+                await asyncio.wait_for(asyncio.shield(holder), grace)
 
     async def reconnect(self) -> None:
-        # Closing a wedged streamable-HTTP transport cancels an anyio task group mid-exit,
-        # and that cancellation once escaped every guard and hung a batch for eight hours.
-        # A wedged session is abandoned, not closed; one leaked connection per incident.
-        if self._stack is not None:
-            self._abandoned.append(self._stack)
-            self._stack = None
+        stop, self._holder, self._stop = self._stop, None, None
+        if stop is not None:
+            stop.set()  # the old holder exits in its own task, now or never
         await self.connect()
 
     async def call(
