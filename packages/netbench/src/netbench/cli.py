@@ -10,7 +10,7 @@ import typer
 
 from netbench.admin import HttpAdmin, read_admin_token
 from netbench.claude_cli import ClaudeCliRunner
-from netbench.clients import ToolClient, http_session
+from netbench.clients import HttpToolClient
 from netbench.harness import Harness, RunConfig
 from netbench.local_agent import (
     DEFAULT_NUM_CTX,
@@ -148,10 +148,14 @@ def run(
         )
 
     async def main() -> int:
-        async with http_session(twinlab) as twin_s, http_session(netverify) as verify_s:
+        twin_client = HttpToolClient(twinlab, "twinlab")
+        verify_client = HttpToolClient(netverify, "netverify")
+        await twin_client.connect()
+        await verify_client.connect()
+        try:
             harness = Harness(
-                twin=ToolClient(twin_s, "twinlab"),
-                verify=ToolClient(verify_s, "netverify"),
+                twin=twin_client,
+                verify=verify_client,
                 admin=admin_client,
                 results_dir=results,
                 matrix=matrix,
@@ -159,6 +163,9 @@ def run(
             records = await harness.run_matrix(
                 chosen, config, agent, trials=trials, max_runs=max_runs
             )
+        finally:
+            await verify_client.aclose()
+            await twin_client.aclose()
         typer.echo(f"{len(records)} new runs recorded in {harness.results_path}")
         return 0
 

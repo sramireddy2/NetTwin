@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,6 +42,9 @@ class ToolCallFailed(RuntimeError):
 class ToolClient:
     """Thin wrapper over an MCP `ClientSession` that records every call."""
 
+    #: Seconds past the request timeout before a call is abandoned outright.
+    hard_margin: float = 30.0
+
     def __init__(self, session: ClientSession, name: str = "server") -> None:
         self.session = session
         self.name = name
@@ -52,7 +55,10 @@ class ToolClient:
     ) -> CallResult:
         args = args or {}
         started = time.monotonic()
-        result = await self.session.call_tool(tool, args, read_timeout_seconds=timeout)
+        # The request-level timeout has been seen to let a call block for 26 minutes once the
+        # transport's event stream had dropped; the outer bound is what actually returns.
+        with anyio.fail_after(timeout + self.hard_margin):
+            result = await self.session.call_tool(tool, args, read_timeout_seconds=timeout)
         duration = int((time.monotonic() - started) * 1000)
         if isinstance(result, CallToolResult):
             call = CallResult(
@@ -100,6 +106,35 @@ async def memory_session(
             await s.initialize()
             yield s
         tg.cancel_scope.cancel()
+
+
+class HttpToolClient(ToolClient):
+    """A `ToolClient` over streamable HTTP that owns its session and can reopen it.
+
+    The harness's sessions idle while an agent works; the server-to-client event stream
+    drops after about ten minutes of that and the next call can hang. `reconnect()` throws
+    the session away and opens a fresh one, bounded so a wedged transport cannot hold it.
+    """
+
+    def __init__(self, url: str, name: str = "server") -> None:
+        super().__init__(session=None, name=name)  # type: ignore[arg-type]
+        self.url = url
+        self._stack: AsyncExitStack | None = None
+
+    async def connect(self) -> None:
+        stack = AsyncExitStack()
+        self.session = await stack.enter_async_context(http_session(self.url))
+        self._stack = stack
+
+    async def aclose(self) -> None:
+        stack, self._stack = self._stack, None
+        if stack is not None:
+            with anyio.move_on_after(15), suppress(Exception):
+                await stack.aclose()
+
+    async def reconnect(self) -> None:
+        await self.aclose()
+        await self.connect()
 
 
 @asynccontextmanager

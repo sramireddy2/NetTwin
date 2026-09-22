@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from netbench.admin import CallableAdmin
 from netbench.clients import ToolClient, memory_session
 from netbench.harness import Harness, RunConfig
@@ -108,6 +110,10 @@ class _FlakyVerify(ToolClient):
         super().__init__(session, "netverify")  # type: ignore[arg-type]
         self.failures = failures
         self.timeouts = 0
+        self.reconnects = 0
+
+    async def reconnect(self) -> None:
+        self.reconnects += 1
 
     async def call(self, tool: str, args: dict | None = None, *, timeout: float = 180):
         if tool == "reachability_matrix" and self.timeouts < self.failures:
@@ -141,6 +147,7 @@ async def test_post_run_check_retries_once_then_records_the_failure(tmp_path: Pa
                 scenario, RunConfig(name="fake", runner="fake"), 1, FakeAgentRunner(SCENARIOS)
             )
             assert verify.timeouts == min(failures, 2)
+            assert verify.reconnects == 1  # the session is reopened once, between the attempts
             assert record.score.root_cause and record.score.verified
             if expect_error:  # the record carries the gap; the batch goes on
                 assert record.error == "HarnessCheckFailed: netverify did not answer"
@@ -218,3 +225,17 @@ def test_results_jsonl_is_one_record_per_line(tmp_path: Path) -> None:
     assert load_records(path) == []
     assert "No runs recorded" in render([], "empty")
     assert json.loads('{"a": 1}') == {"a": 1}
+
+
+async def test_tool_call_is_abandoned_past_its_hard_bound() -> None:
+    import asyncio
+
+    class Hanging:
+        async def call_tool(self, *args: object, **kwargs: object) -> None:
+            await asyncio.sleep(3600)
+
+    client = ToolClient(Hanging(), "netverify")  # type: ignore[arg-type]
+    client.hard_margin = 0.2
+    with pytest.raises(TimeoutError):
+        await client.call("intent_check", timeout=0.1)
+    assert client.calls == []
