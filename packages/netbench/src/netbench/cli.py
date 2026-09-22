@@ -89,6 +89,9 @@ def run(
     result_cap: int = typer.Option(
         RESULT_CAP, help="local runner: characters of a tool result the model gets to see"
     ),
+    think: bool = typer.Option(
+        False, "--think", help="local runner: let a thinking model (qwen3) think before each turn"
+    ),
     matrix: str = typer.Option("v0", help="Results are appended to results/<matrix>/runs.jsonl"),
     scenarios: str = typer.Option("all", help="'all' or comma-separated ids or prefixes"),
     trials: int = typer.Option(1, min=1),
@@ -128,7 +131,7 @@ def run(
         agent = ManualRunner(admin_client, timeout=timeout, notify=typer.echo)
     elif runner == "local":
         agent = LocalRunner(
-            OllamaChat(model, base_url=ollama, num_ctx=num_ctx),
+            OllamaChat(model, base_url=ollama, num_ctx=num_ctx, think=think),
             roles_dir=Path(".claude") / "agents",
             skills_dir=Path(".claude") / "skills",
             skill=skill,
