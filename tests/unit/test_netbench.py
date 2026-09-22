@@ -239,3 +239,39 @@ async def test_tool_call_is_abandoned_past_its_hard_bound() -> None:
     with pytest.raises(TimeoutError):
         await client.call("intent_check", timeout=0.1)
     assert client.calls == []
+
+
+async def test_http_tool_client_reopens_its_session_and_retries_once() -> None:
+    import asyncio
+
+    from mcp.types import CallToolResult, TextContent
+
+    from netbench.clients import HttpToolClient
+
+    class Hanging:
+        async def call_tool(self, *args: object, **kwargs: object) -> None:
+            await asyncio.sleep(3600)
+
+    class Working:
+        async def call_tool(self, name: str, args: dict, **kwargs: object) -> CallToolResult:
+            return CallToolResult(content=[TextContent(type="text", text="ok")], isError=False)
+
+    class Fake(HttpToolClient):
+        def __init__(self) -> None:
+            super().__init__("http://unused/mcp", "twinlab")
+            self.sessions: list[object] = [Hanging(), Working()]
+            self.reconnects = 0
+
+        async def connect(self) -> None:
+            self.session = self.sessions.pop(0)  # type: ignore[assignment]
+
+        async def aclose(self) -> None:
+            self.reconnects += 1
+
+    client = Fake()
+    client.hard_margin = 0.2
+    await client.connect()
+    result = await client.call("snapshot", timeout=0.1)
+    assert result.ok and result.text == "ok"
+    assert client.reconnects == 1 and client.sessions == []
+    assert [c.tool for c in client.calls] == ["snapshot"]  # the abandoned attempt is not a call

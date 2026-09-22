@@ -6,6 +6,7 @@ CI and the real servers on the lab host without knowing which.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager, suppress
@@ -16,8 +17,11 @@ import anyio
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from mcp.server.mcpserver import MCPServer
+from mcp.shared.exceptions import MCPError
 from mcp.shared.memory import create_client_server_memory_streams
 from mcp.types import CallToolResult, Tool
+
+log = logging.getLogger("netbench.clients")
 
 
 @dataclass(frozen=True)
@@ -135,6 +139,23 @@ class HttpToolClient(ToolClient):
     async def reconnect(self) -> None:
         await self.aclose()
         await self.connect()
+
+    async def call(
+        self, tool: str, args: dict[str, Any] | None = None, *, timeout: float = 180
+    ) -> CallResult:
+        """One call, and on a wedged transport one more over a fresh session.
+
+        Every caller gets this: the local runner's tool calls, the harness's reset and
+        change lookups, not only the post-run checks. A second failure is the caller's.
+        """
+        try:
+            return await super().call(tool, args, timeout=timeout)
+        except (TimeoutError, MCPError) as exc:
+            log.warning(
+                "%s %s failed (%s); reopening the session and retrying", self.name, tool, exc
+            )
+            await self.reconnect()
+            return await super().call(tool, args, timeout=timeout)
 
 
 @asynccontextmanager
