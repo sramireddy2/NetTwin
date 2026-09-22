@@ -515,3 +515,44 @@ between a wrong fix and the export gate (019 and 007 without it, none with it); 
 configuration converges on the same three model habits (the 006 work-around, the 001 wrong
 end for the solo agent, leading with BGP on 021); and the harness-side scores, not the
 agent's own report, are what made the skill-text defect and the leaked fixes visible.
+
+## Local model baseline (M10)
+
+The local runner (`netbench run --runner local`) drives an Ollama model through the same
+twinlab and netverify tools and the same `.claude/agents` role files as the Claude team: MCP
+tools become Ollama functions, role allowlists filter them, the skill body is the system
+prompt, and `launch_agent` stands in for the Agent tool in team mode. CPU only (Intel iGPU
+unused, 32 GB RAM), `num_ctx` 16384, tool results capped at 3000 characters, 20 turns.
+
+Row `local-diagnose-solo-qwen2.5-coder-7b`, tier A (001 to 014), verifier on:
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| local-diagnose-solo-qwen2.5-coder-7b | 14 | 0% | 0% | 0% | 36% | 0% | 1 | 951 | 0% |
+| claude-diagnose-solo-sonnet (same skill) | 22 | 82% | 95% | 91% | 95% | 91% | 1 | 225 | 77% |
+
+- Zero on every axis. In 14 runs the 7B model made 260 tool calls: 243 show commands, 10
+  snapshots, 7 topology reads, not one `apply_config`, not one final report. Every run used
+  its 20 turns reading and then stopped. It never repaired anything, so it also never broke
+  anything; the 36 % "no collateral" is the five scenarios whose planted fault happens not to
+  show in the reachability matrix.
+- Every tool call arrived as JSON text in the message body rather than in Ollama's
+  `tool_calls` field (`text_calls=20` on every run). Without the loop's text fallback the row
+  would have been fourteen one-turn runs.
+- Cost of a CPU baseline: median 866 s per scenario (670 to 1391), 3.7 hours for the row,
+  about 132 k prompt tokens per run because each turn resends the whole context. One run
+  (010) ended in a `ModelTimeout` after a single generation exceeded 15 minutes; it is the
+  row's error.
+- qwen3:14b was tried first and dropped for this row: with thinking disabled it answered
+  empty messages after the topology read, three turns in a row and again after nudges; a
+  direct probe with a short prompt produced tool calls, so the failure is prompt-size
+  dependent. With thinking enabled it produced tool calls in the probe at roughly 5 minutes
+  per turn. A single-scenario run with `--think` is recorded separately.
+- What the row cost the harness: four batch deaths, all in the harness rather than the
+  model, each fixed and merged the same day: a dropped Ollama request mapped to
+  "runner unavailable" (now a per-run failure), the harness's own MCP sessions wedging after
+  idling through a 15-minute run (now a hard time bound on every call and a retry over a
+  fresh session), a wedged session's teardown hanging the process for eight hours (the
+  process now exits hard after its summary), and an abandoned session finalised from the
+  wrong task (each session now lives in its own holder task). A fast agent never exposed
+  any of this; a slow one did within hours.
