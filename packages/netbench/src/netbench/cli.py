@@ -12,11 +12,44 @@ from netbench.admin import HttpAdmin, read_admin_token
 from netbench.claude_cli import ClaudeCliRunner
 from netbench.clients import ToolClient, http_session
 from netbench.harness import Harness, RunConfig
+from netbench.local_agent import (
+    DEFAULT_NUM_CTX,
+    DEFAULT_OLLAMA,
+    RESULT_CAP,
+    LocalRunner,
+    OllamaChat,
+)
 from netbench.report import load_records, render
 from netbench.runner import FakeAgentRunner, ManualRunner, Runner
 from nettwin_core.scenario import load_scenarios
 
 app = typer.Typer(no_args_is_help=True, help="NetBench: scenarios in, scores out.")
+
+RUNNERS = ("fake", "manual", "claude", "local")
+#: Runners that drive a model through the skill; the others have no model or skill to label.
+AGENTIC = ("claude", "local")
+DEFAULT_MODEL = {"claude": "sonnet", "local": "qwen3:14b"}
+
+
+def row_label(runner: str, skill: str, model: str) -> str:
+    """`claude-diagnose-sonnet`, `local-diagnose-solo-qwen3-14b`, or just the runner name."""
+    if runner == "claude":
+        return f"claude-{skill}-{model}"
+    if runner == "local":
+        return f"local-{skill}-{model.replace(':', '-').replace('/', '-')}"
+    return runner
+
+
+def config_for(
+    runner: str, skill: str, model: str, no_verifier: bool, name: str | None = None
+) -> RunConfig:
+    return RunConfig(
+        name=name or f"{row_label(runner, skill, model)}{'-noverify' if no_verifier else ''}",
+        runner=runner,
+        model=model if runner in AGENTIC else None,
+        verifier=not no_verifier,
+        multi_agent=(skill == "diagnose") if runner in AGENTIC else None,
+    )
 
 
 def _select(scenario_ids: str, scenarios_dir: Path):
@@ -36,15 +69,25 @@ def run(
         "fake",
         help="fake replays each scenario's expected fix; manual waits for an interactive "
         "Claude Code /diagnose run and scores its export bundle; claude runs the skill "
-        "headlessly with `claude -p`",
+        "headlessly with `claude -p`; local drives an Ollama model through the same tools "
+        "and role files",
     ),
-    model: str = typer.Option("sonnet", help="claude runner: Claude Code model alias or id"),
+    model: str | None = typer.Option(
+        None,
+        help="claude runner: Claude Code model alias or id (default sonnet); local runner: "
+        "Ollama tag such as qwen3:14b (the default) or qwen2.5-coder:7b",
+    ),
     skill: str = typer.Option(
-        "diagnose", help="claude runner: diagnose (team) or diagnose-solo (single agent)"
+        "diagnose", help="claude/local runners: diagnose (team) or diagnose-solo (single agent)"
     ),
-    max_turns: int = typer.Option(60, help="claude runner: --max-turns for the commander"),
+    max_turns: int = typer.Option(60, help="claude/local runners: turn budget for the commander"),
     run_timeout: float = typer.Option(
         1500.0, help="claude runner: kill the CLI after this many seconds"
+    ),
+    ollama: str = typer.Option(DEFAULT_OLLAMA, help="local runner: Ollama base URL"),
+    num_ctx: int = typer.Option(DEFAULT_NUM_CTX, help="local runner: Ollama context window"),
+    result_cap: int = typer.Option(
+        RESULT_CAP, help="local runner: characters of a tool result the model gets to see"
     ),
     matrix: str = typer.Option("v0", help="Results are appended to results/<matrix>/runs.jsonl"),
     scenarios: str = typer.Option("all", help="'all' or comma-separated ids or prefixes"),
@@ -70,18 +113,12 @@ def run(
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
     chosen = _select(scenarios, scenarios_dir)
-    if runner not in ("fake", "manual", "claude"):
-        raise typer.BadParameter("runner must be fake, manual or claude")
+    if runner not in RUNNERS:
+        raise typer.BadParameter(f"runner must be one of {', '.join(RUNNERS)}")
     if skill not in ("diagnose", "diagnose-solo"):
         raise typer.BadParameter("skill must be diagnose or diagnose-solo")
-    label = f"claude-{skill}-{model}" if runner == "claude" else runner
-    config = RunConfig(
-        name=name or f"{label}{'-noverify' if no_verifier else ''}",
-        runner=runner,
-        model=model if runner == "claude" else None,
-        verifier=not no_verifier,
-        multi_agent=(skill == "diagnose") if runner == "claude" else None,
-    )
+    model = model or DEFAULT_MODEL.get(runner, "sonnet")
+    config = config_for(runner, skill, model, no_verifier, name)
     token = read_admin_token(token_file)
     admin_client = HttpAdmin(admin, token)
     agent: Runner
@@ -89,6 +126,16 @@ def run(
         agent = FakeAgentRunner(chosen)
     elif runner == "manual":
         agent = ManualRunner(admin_client, timeout=timeout, notify=typer.echo)
+    elif runner == "local":
+        agent = LocalRunner(
+            OllamaChat(model, base_url=ollama, num_ctx=num_ctx),
+            roles_dir=Path(".claude") / "agents",
+            skills_dir=Path(".claude") / "skills",
+            skill=skill,
+            max_turns=max_turns,
+            transcripts_dir=results / matrix / "transcripts",
+            result_cap=result_cap,
+        )
     else:
         agent = ClaudeCliRunner(
             admin_client,
