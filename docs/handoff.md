@@ -88,7 +88,7 @@ clock (M6).
 
 Main is 03a1eb2 (M0-M9 merged, PRs #1-#14). Two branches carry this session's work:
 
-- `bench/v1-ablation-rows` (checked out in C:/dev/NetTwin, commit 28fdbd0 holds the
+- MATRIX v1 COMPLETE. `bench/v1-ablation-rows` = PR #16 (opened 2026-09-21 ~21:20 local; squash-merge once CI is green, then `git checkout main && git pull`). It was the branch (checked out in C:/dev/NetTwin) where commit 28fdbd0 held the
   verifier-off team row, plus the lab-notes and handoff docs; pushed to origin, no PR yet).
   The solo row started at 19:30 UTC on 2026-09-21 from the previous chat's background task (it
   dies with that chat; completed runs stay recorded, a planted fault needs `uv run nettwin lab
@@ -96,6 +96,7 @@ Main is 03a1eb2 (M0-M9 merged, PRs #1-#14). Two branches carry this session's wo
   branch when it finishes, then run the last row, then push and open one results PR with
   the docs/lab-notes.md analysis (section "Ablation: the team without its verifier" is
   already written and uncommitted; docs/handoff.md mirrors this memory file).
+- M10 smoke test started 21:20 local 2026-09-21 from the worktree (`cd .claude/worktrees/agent-a3c23ca2a6eac06f3 && uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo --scenarios 001 --matrix local-smoke`); delete `results/local-smoke` in the worktree afterwards.
 - `feat/local-agent` = PR #15 (M10: netbench.local_agent, `--runner local`, ToolClient.list_tools,
   12 unit tests, `.claude/worktrees/` gitignored). CI green at 80bb530. Not merged: it has never
   talked to a real Ollama. Before merging: with NO Claude batch running, servers in bench mode,
@@ -113,7 +114,7 @@ Matrix v1 (Sonnet 5, results/v1/runs.jsonl, golden id e4a6c253d114):
 | claude-diagnose-sonnet-noverify | 22 | 82 % | 95 % | 0 % | 82 % | 152 | 0 |
 | claude-diagnose-solo-sonnet | 22 | 82 % | 95 % | 91 % | 77 % | 225 | 1 (018 RunTimeout) |
 | claude-diagnose-solo-sonnet-noverify-diagonly | 22 | 91 % | 5 % | 0 % | 5 % | 75 | 0 (skill-text defect: 0 ops applied, kept as evidence) |
-| claude-diagnose-solo-sonnet-noverify | STUCK at 11 of 22 (001-011 recorded, fixed skill applies changes: 9 RC, 10 fix correct). The harness crashed three times in a row at scenario 012 (`MCPError: Request 'tools/call' timed out` in run_one's post-run reachability_matrix/intent_check, harness.py ~174-177, 180 s default). Twin was reset to golden at the end of the chat; batch NOT running. BEFORE resuming: (1) harden run_one: pass timeout=600 to the post-run reachability_matrix and intent_check and wrap them so an MCPError records an error record and continues after reset; (2) look at results/v1/transcripts/012-interface-shutdown.claude-diagnose-solo-sonnet-noverify.1.jsonl (apply_config ops) and, with 012 injected and that fix applied by hand, time netverify reachability_matrix to see which probe hangs; then resume with the same command |
+| claude-diagnose-solo-sonnet-noverify | 22 | 82 % | 91 % | 0 % | 77 % | 77 | 0 |
 
 Findings of the verifier-off row (details in lab-notes): median 150 s, no hangs (both CLI
 hangs of the verifier-on rows were inside the verifier subagent). 019 is the headline: the
@@ -131,10 +132,9 @@ change (the team skill's flag correctly skips 5 and 6). The agent obeyed: right 
 20 of 22, zero changes applied, about a minute per run. Those 22 records were relabelled
 `claude-diagnose-solo-sonnet-noverify-diagonly` (a diagnose-only row, useful as a pure
 diagnosis-accuracy number) and the row is being rerun under the proper name with the fixed
-clause ("still apply the change in step 4, then skip step 5 entirely"). Write this up in
-lab-notes with the solo analysis before opening the results PR.
+clause ("still apply the change in step 4, then skip step 5 entirely"). Written up in lab-notes (2becf3f).
 
-Solo row (verifier on) is complete and committed (8aded21, pushed): 22 runs, median 131 s, misses are 001 (blamed r1 for r3's area mismatch and changed r1 to match: fix correct, not the planted cause, not golden), 006 (prefix-list work-around, now 4 of 4 across rows), 019 (right cause, NAT clause order differs from golden), 021 (led with the BGP half), and 018 (RunTimeout: the solo agent hung after 9 tool calls, killed at 1500 s). Write the solo analysis into lab-notes next to the ablation section before opening the results PR. Earlier in the row the harness crashed once: 10 runs recorded (001-010) before at 16:15 local on
+Solo row (verifier on) is complete and committed (8aded21, pushed): 22 runs, median 131 s, misses are 001 (blamed r1 for r3's area mismatch and changed r1 to match: fix correct, not the planted cause, not golden), 006 (prefix-list work-around, now 4 of 4 across rows), 019 (right cause, NAT clause order differs from golden), 021 (led with the BGP half), and 018 (RunTimeout: the solo agent hung after 9 tool calls, killed at 1500 s). Solo, defect and harness-retry sections are written in lab-notes (2becf3f). Earlier in the row the harness crashed once: 10 runs recorded (001-010) before at 16:15 local on
 2026-09-21: after the agent had fixed and exported 011, the harness's own post-run
 `reachability_matrix` / `intent_check` on netverify exceeded its MCP timeout (`MCPError:
 Request 'tools/call' timed out`, harness.py run_one lines 174-177) and the batch exited 1
