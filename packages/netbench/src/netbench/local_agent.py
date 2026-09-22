@@ -336,6 +336,7 @@ class LoopResult:
     turns: int
     hit_max_turns: bool
     messages: list[dict[str, Any]]
+    text_calls: int = 0  # tool calls the model wrote as text rather than as tool_calls
 
 
 class ToolLoop:
@@ -347,10 +348,11 @@ class ToolLoop:
         self.max_turns = max_turns
         self.messages: list[dict[str, Any]] = []
         self.turns = 0
+        self.text_calls = 0
 
     def partial(self) -> LoopResult:
         """Whatever has happened so far, for the transcript of a run that did not finish."""
-        return LoopResult("", self.turns, False, self.messages)
+        return LoopResult("", self.turns, False, self.messages, self.text_calls)
 
     async def run(self, system: str, user: str) -> LoopResult:
         messages = self.messages = [
@@ -364,13 +366,15 @@ class ToolLoop:
             messages.append(message)
             text = str(message.get("content") or "")
             calls = message.get("tool_calls") or text_tool_calls(text)
+            if calls and not message.get("tool_calls"):
+                self.text_calls += 1
             if not calls:
-                return LoopResult(text, turn, False, messages)
+                return LoopResult(text, turn, False, messages, self.text_calls)
             for call in calls:
                 name, args = parse_call(call)
                 result = await self.tools.dispatch(name, args)
                 messages.append({"role": "tool", "tool_name": name, "content": result})
-        return LoopResult(text, self.max_turns, True, messages)
+        return LoopResult(text, self.max_turns, True, messages, self.text_calls)
 
 
 class LocalRunner:
@@ -433,11 +437,12 @@ class LocalRunner:
         loop = ToolLoop(
             self.chat, Toolset(tools, result_cap=self.result_cap), max_turns=self.max_turns
         )
+        result: LoopResult | None = None
         try:
             result = await loop.run(self.system_prompt(ctx), self.user_prompt(ctx))
         finally:
             # A failed loop still leaves its transcript behind; that is what explains the failure.
-            self.save_transcript(ctx, loop.partial(), launches)
+            self.save_transcript(ctx, result or loop.partial(), launches)
         return self.output(ctx, result, launches, tokens_before, time.monotonic() - started)
 
     def launch_tool(
@@ -519,6 +524,7 @@ class LocalRunner:
             "skill": self.skill.name,
             "turns": result.turns,
             "hit_max_turns": result.hit_max_turns,
+            "text_calls": result.text_calls,
             "messages": result.messages,
             "subagents": launches,
         }
@@ -557,6 +563,8 @@ class LocalRunner:
         )
         if launches:
             notes += " launched=" + ",".join(str(launch["subagent_type"]) for launch in launches)
+        if result.text_calls:
+            notes += f" text_calls={result.text_calls}"
         if result.hit_max_turns:
             notes += " max_turns_hit"
         if report is None:
