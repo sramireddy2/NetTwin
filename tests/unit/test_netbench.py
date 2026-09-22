@@ -273,3 +273,28 @@ async def test_http_tool_client_reopens_its_session_and_retries_once() -> None:
     assert result.ok and result.text == "ok"
     assert client.reconnects == 2 and client.sessions == []
     assert [c.tool for c in client.calls] == ["snapshot"]  # the abandoned attempt is not a call
+
+
+async def test_http_tool_client_holds_each_session_in_its_own_task(tmp_path: Path) -> None:
+    from netbench.clients import HttpToolClient
+
+    settings = Settings.from_env(_env(tmp_path))
+    twin_app = TwinLab.from_settings(settings, executor=FakeExecutor().on(_twin_scripted))
+    server = build_twinlab(twin_app)
+
+    class InMemory(HttpToolClient):
+        opened = 0
+
+        def _open(self):  # type: ignore[override]
+            InMemory.opened += 1
+            return memory_session(server)
+
+    client = InMemory("memory://twinlab", "twinlab")
+    await client.connect()
+    assert (await client.call("snapshot")).ok
+    first = client._holder
+    await client.reconnect()  # the first holder exits by itself, in its own task
+    assert (await client.call("snapshot")).ok
+    assert InMemory.opened == 2 and first is not None
+    await client.aclose()
+    assert first.done() and client._holder is None
