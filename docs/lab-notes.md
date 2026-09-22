@@ -487,3 +487,31 @@ is in the harness's idle MCP session, not the twin. `Harness.post_run_call` now 
 netverify once after five seconds and, if it fails again, records `HarnessCheckFailed` on
 the run and moves on; `reset()` treats its convergence wait the same way. Unit test in
 `tests/unit/test_netbench.py`.
+
+### Solo without the verifier, and the matrix v1 table
+
+Row `claude-diagnose-solo-sonnet-noverify` (fixed skill): 22 runs, no errors, median 72 s
+(45 to 209). 001 again moved r1 to area 0 (the solo agent picks the wrong end of that link
+twice out of twice); 006 again the prefix-list (five of five across every row). 019 is the
+same line the team wrote without its verifier, `ip prefix-list CORP seq 20 permit
+10.0.20.0/24`: the guest subnet advertised to the ISP as a fix for a missing NAT rule, two
+configurations out of two when nothing checks the change. 007 is new: right cause (the
+redistribution route-map), a change that did not restore the intent and broke reachability
+elsewhere, reported as done. 021 led with the BGP half; the control reported no cause and
+changed nothing.
+
+| Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
+|---|---|---|---|---|---|---|---|---|---|
+| claude-diagnose-sonnet (team, verifier) | 22 | 91% | 95% | 91% | 95% | 95% | 1 | 393 | 82% |
+| claude-diagnose-sonnet-noverify | 22 | 82% | 95% | 0% | 95% | 100% | 0 | 152 | 82% |
+| claude-diagnose-solo-sonnet (verifier) | 22 | 82% | 95% | 91% | 95% | 91% | 1 | 225 | 77% |
+| claude-diagnose-solo-sonnet-noverify | 22 | 82% | 91% | 0% | 91% | 95% | 0 | 77 | 77% |
+| claude-diagnose-solo-sonnet-noverify-diagonly | 22 | 91% | 5% | 0% | 36% | 5% | 0 | 75 | 5% |
+| claude-diagnose-sonnet-p0 | 8 | 75% | 88% | 75% | 88% | 75% | 1 | 861 | 83% |
+
+Reading across: the team adds nine points of root-cause accuracy over one agent, at roughly
+twice the wall clock; the verifier costs another factor of two in time and is what stands
+between a wrong fix and the export gate (019 and 007 without it, none with it); every
+configuration converges on the same three model habits (the 006 work-around, the 001 wrong
+end for the solo agent, leading with BGP on 021); and the harness-side scores, not the
+agent's own report, are what made the skill-text defect and the leaked fixes visible.
