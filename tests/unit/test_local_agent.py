@@ -539,3 +539,17 @@ def test_tool_calls_written_as_text_are_recognised() -> None:
     assert [c["function"]["name"] for c in text_tool_calls(fenced)] == ["read_topology"]
     assert text_tool_calls("Root cause: r3 area mismatch.") == []
     assert text_tool_calls(json.dumps({"root_cause": {"node": "r3"}, "change_ids": []})) == []
+
+
+async def test_model_timeout_is_a_run_failure_not_unavailability() -> None:
+    import httpx
+
+    from netbench.local_agent import ModelTimeout, OllamaChat
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("slow", request=request)
+
+    chat = OllamaChat("m", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(ModelTimeout):
+        await chat.chat([{"role": "user", "content": "hi"}], [])
+    assert not issubclass(ModelTimeout, RunnerUnavailable)

@@ -73,6 +73,10 @@ Transport = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 ToolHandler = Callable[[dict[str, Any]], Awaitable[str]]
 
 
+class ModelTimeout(RuntimeError):
+    """A single model call exceeded the HTTP timeout; the harness records the run as crashed."""
+
+
 class OllamaChat:
     """Non-streaming `POST /api/chat` with function calling; counts tokens across calls.
 
@@ -138,6 +142,11 @@ class OllamaChat:
                 else nullcontext(self.client)
             ) as client:
                 response = await client.post(url, json=payload)
+        except httpx.TimeoutException as exc:
+            # One slow generation is this run's failure, not a reason to stop the matrix.
+            raise ModelTimeout(
+                f"Ollama did not answer within {self.timeout:.0f}s (context {self.num_ctx})"
+            ) from exc
         except httpx.HTTPError as exc:
             raise RunnerUnavailable(f"cannot reach Ollama at {self.base_url}: {exc}") from exc
         try:
@@ -336,14 +345,21 @@ class ToolLoop:
         self.chat = chat
         self.tools = tools
         self.max_turns = max_turns
+        self.messages: list[dict[str, Any]] = []
+        self.turns = 0
+
+    def partial(self) -> LoopResult:
+        """Whatever has happened so far, for the transcript of a run that did not finish."""
+        return LoopResult("", self.turns, False, self.messages)
 
     async def run(self, system: str, user: str) -> LoopResult:
-        messages: list[dict[str, Any]] = [
+        messages = self.messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
         text = ""
         for turn in range(1, self.max_turns + 1):
+            self.turns = turn
             message = await self.chat.chat(messages, self.tools.definitions)
             messages.append(message)
             text = str(message.get("content") or "")
@@ -417,8 +433,11 @@ class LocalRunner:
         loop = ToolLoop(
             self.chat, Toolset(tools, result_cap=self.result_cap), max_turns=self.max_turns
         )
-        result = await loop.run(self.system_prompt(ctx), self.user_prompt(ctx))
-        self.save_transcript(ctx, result, launches)
+        try:
+            result = await loop.run(self.system_prompt(ctx), self.user_prompt(ctx))
+        finally:
+            # A failed loop still leaves its transcript behind; that is what explains the failure.
+            self.save_transcript(ctx, loop.partial(), launches)
         return self.output(ctx, result, launches, tokens_before, time.monotonic() - started)
 
     def launch_tool(

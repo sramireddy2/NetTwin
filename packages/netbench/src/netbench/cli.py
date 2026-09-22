@@ -12,7 +12,13 @@ from netbench.admin import HttpAdmin, read_admin_token
 from netbench.claude_cli import ClaudeCliRunner
 from netbench.clients import ToolClient, http_session
 from netbench.harness import Harness, RunConfig
-from netbench.local_agent import DEFAULT_NUM_CTX, DEFAULT_OLLAMA, LocalRunner, OllamaChat
+from netbench.local_agent import (
+    DEFAULT_NUM_CTX,
+    DEFAULT_OLLAMA,
+    RESULT_CAP,
+    LocalRunner,
+    OllamaChat,
+)
 from netbench.report import load_records, render
 from netbench.runner import FakeAgentRunner, ManualRunner, Runner
 from nettwin_core.scenario import load_scenarios
@@ -80,6 +86,9 @@ def run(
     ),
     ollama: str = typer.Option(DEFAULT_OLLAMA, help="local runner: Ollama base URL"),
     num_ctx: int = typer.Option(DEFAULT_NUM_CTX, help="local runner: Ollama context window"),
+    result_cap: int = typer.Option(
+        RESULT_CAP, help="local runner: characters of a tool result the model gets to see"
+    ),
     matrix: str = typer.Option("v0", help="Results are appended to results/<matrix>/runs.jsonl"),
     scenarios: str = typer.Option("all", help="'all' or comma-separated ids or prefixes"),
     trials: int = typer.Option(1, min=1),
@@ -125,6 +134,7 @@ def run(
             skill=skill,
             max_turns=max_turns,
             transcripts_dir=results / matrix / "transcripts",
+            result_cap=result_cap,
         )
     else:
         agent = ClaudeCliRunner(
