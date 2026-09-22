@@ -605,3 +605,22 @@ async def test_topology_result_is_never_truncated() -> None:
     )
     assert len(await tools.dispatch("read_topology", {})) == 500
     assert "[truncated 400 chars]" in await tools.dispatch("show", {})
+
+
+async def test_dropped_request_is_a_run_failure_but_refused_connection_is_unavailability() -> None:
+    import httpx
+
+    from netbench.local_agent import ModelCallFailed, OllamaChat
+
+    def dropped(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("Server disconnected", request=request)
+
+    def refused(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    chat = OllamaChat("m", client=httpx.AsyncClient(transport=httpx.MockTransport(dropped)))
+    with pytest.raises(ModelCallFailed):
+        await chat.chat([{"role": "user", "content": "hi"}], [])
+    chat = OllamaChat("m", client=httpx.AsyncClient(transport=httpx.MockTransport(refused)))
+    with pytest.raises(RunnerUnavailable):
+        await chat.chat([{"role": "user", "content": "hi"}], [])

@@ -124,6 +124,7 @@ class HttpToolClient(ToolClient):
         super().__init__(session=None, name=name)  # type: ignore[arg-type]
         self.url = url
         self._stack: AsyncExitStack | None = None
+        self._abandoned: list[AsyncExitStack] = []
 
     async def connect(self) -> None:
         stack = AsyncExitStack()
@@ -131,13 +132,19 @@ class HttpToolClient(ToolClient):
         self._stack = stack
 
     async def aclose(self) -> None:
+        """Close the live session. Abandoned ones are left to process exit on purpose."""
         stack, self._stack = self._stack, None
         if stack is not None:
-            with anyio.move_on_after(15), suppress(Exception):
+            with suppress(Exception):
                 await stack.aclose()
 
     async def reconnect(self) -> None:
-        await self.aclose()
+        # Closing a wedged streamable-HTTP transport cancels an anyio task group mid-exit,
+        # and that cancellation once escaped every guard and hung a batch for eight hours.
+        # A wedged session is abandoned, not closed; one leaked connection per incident.
+        if self._stack is not None:
+            self._abandoned.append(self._stack)
+            self._stack = None
         await self.connect()
 
     async def call(

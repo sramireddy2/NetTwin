@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import sys
+import traceback
 from pathlib import Path
 
 import typer
@@ -20,7 +23,7 @@ from netbench.local_agent import (
     OllamaChat,
 )
 from netbench.report import load_records, render
-from netbench.runner import FakeAgentRunner, ManualRunner, Runner
+from netbench.runner import FakeAgentRunner, ManualRunner, Runner, RunnerUnavailable
 from nettwin_core.scenario import load_scenarios
 
 app = typer.Typer(no_args_is_help=True, help="NetBench: scenarios in, scores out.")
@@ -155,22 +158,30 @@ def run(
         verify_client = HttpToolClient(netverify, "netverify")
         await twin_client.connect()
         await verify_client.connect()
+        harness = Harness(
+            twin=twin_client,
+            verify=verify_client,
+            admin=admin_client,
+            results_dir=results,
+            matrix=matrix,
+        )
+        code = 0
         try:
-            harness = Harness(
-                twin=twin_client,
-                verify=verify_client,
-                admin=admin_client,
-                results_dir=results,
-                matrix=matrix,
-            )
             records = await harness.run_matrix(
                 chosen, config, agent, trials=trials, max_runs=max_runs
             )
-        finally:
-            await verify_client.aclose()
-            await twin_client.aclose()
-        typer.echo(f"{len(records)} new runs recorded in {harness.results_path}")
-        return 0
+            typer.echo(f"{len(records)} new runs recorded in {harness.results_path}")
+        except RunnerUnavailable as exc:
+            typer.echo(f"stopped, runner unavailable: {exc}", err=True)
+            code = 2
+        except Exception:  # noqa: BLE001 - the batch is over either way; say why and leave
+            traceback.print_exc()
+            code = 1
+        # Every record is on disk the moment its run ends. Closing a wedged streamable-HTTP
+        # session once hung a finished batch for eight hours, so the process does not try.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(code)
 
     raise typer.Exit(asyncio.run(main()))
 
