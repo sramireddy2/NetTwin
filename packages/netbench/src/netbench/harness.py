@@ -154,6 +154,13 @@ class Harness:
             except Exception as exc:  # noqa: BLE001 - transport and timeout errors alike
                 log.warning("post-run %s failed (attempt %d): %s", tool, attempt, exc)
                 await asyncio.sleep(self.retry_delay)
+                reconnect = getattr(self.verify, "reconnect", None)
+                if reconnect is not None and attempt == 1:
+                    try:
+                        await reconnect()
+                        log.info("post-run: reopened the %s session", self.verify.name)
+                    except Exception as again:  # noqa: BLE001
+                        log.warning("post-run: reconnect failed: %s", again)
         return None
 
     async def run_one(
