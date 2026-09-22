@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -12,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from netbench.admin import AdminClient
-from netbench.clients import ToolClient
+from netbench.clients import CallResult, ToolClient
 from netbench.runner import RunContext, Runner, RunnerUnavailable, RunOutput
 from netbench.scoring import Score, score_run
 from nettwin_core.models import ChangeResult, VerificationReport
@@ -60,6 +61,7 @@ class Harness:
         self.admin = admin
         self.results_dir = results_dir
         self.matrix = matrix
+        self.retry_delay = 5.0
         self.golden_snapshot: str | None = None
         self.golden_probes: list[dict[str, Any]] = []
 
@@ -124,7 +126,7 @@ class Harness:
         )
         if not rolled.require()["matches_target"]:
             raise RuntimeError(f"reset did not reach the golden snapshot: {rolled.data}")
-        await self.verify.call("wait_converged", {"timeout": 90})
+        await self.post_run_call("wait_converged", {"timeout": 90})
 
     async def changes_for(self, change_ids: list[str]) -> list[ChangeResult]:
         changes: list[ChangeResult] = []
@@ -135,6 +137,24 @@ class Harness:
         return changes
 
     # --- one run -------------------------------------------------------------------------
+
+    async def post_run_call(
+        self, tool: str, args: dict[str, Any] | None = None, *, timeout: float = 300
+    ) -> CallResult | None:
+        """netverify's judgement after a run, retried once.
+
+        The harness's own MCP session idles while the agent works; when its event stream has
+        dropped meanwhile, the first call after the run can time out even though the server
+        is fine. One retry after the transport reconnects covers that; a second failure is
+        recorded on the run instead of killing the whole batch.
+        """
+        for attempt in (1, 2):
+            try:
+                return await self.verify.call(tool, args, timeout=timeout)
+            except Exception as exc:  # noqa: BLE001 - transport and timeout errors alike
+                log.warning("post-run %s failed (attempt %d): %s", tool, attempt, exc)
+                await asyncio.sleep(self.retry_delay)
+        return None
 
     async def run_one(
         self, scenario: Scenario, config: RunConfig, trial: int, runner: Runner
@@ -171,13 +191,17 @@ class Harness:
             error = f"{type(exc).__name__}: {exc}"
             output = RunOutput(notes="runner crashed")
         duration = round(time.monotonic() - clock, 1)
-        after = await self.verify.call("reachability_matrix")
-        after_probes = after.data["probes"] if after.ok and after.data else []
+        after = await self.post_run_call("reachability_matrix")
+        after_probes = after.data["probes"] if after and after.ok and after.data else []
         # The harness judges the outcome itself, whatever the agent claimed or skipped.
-        check = await self.verify.call("intent_check", timeout=300)
+        check = await self.post_run_call("intent_check")
         after_report = (
-            VerificationReport.model_validate(check.data) if check.ok and check.data else None
+            VerificationReport.model_validate(check.data)
+            if check and check.ok and check.data
+            else None
         )
+        if after is None or check is None:
+            error = (error + "; " if error else "") + "HarnessCheckFailed: netverify did not answer"
         changes = await self.changes_for(output.change_ids)
         score = score_run(
             scenario,

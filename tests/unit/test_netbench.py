@@ -100,6 +100,55 @@ async def test_fake_agent_scores_perfectly_on_a_scripted_twin(tmp_path: Path) ->
     assert f"| {scenario.id} | rFvC | RFVC |" in text  # columns are sorted by config name
 
 
+class _FlakyVerify(ToolClient):
+    """Times out on `reachability_matrix` the first `failures` times, as a dropped MCP
+    event stream does after the harness has idled through a run."""
+
+    def __init__(self, session: object, failures: int) -> None:
+        super().__init__(session, "netverify")  # type: ignore[arg-type]
+        self.failures = failures
+        self.timeouts = 0
+
+    async def call(self, tool: str, args: dict | None = None, *, timeout: float = 180):
+        if tool == "reachability_matrix" and self.timeouts < self.failures:
+            self.timeouts += 1
+            raise RuntimeError("Request 'tools/call' timed out")
+        return await super().call(tool, args, timeout=timeout)
+
+
+async def test_post_run_check_retries_once_then_records_the_failure(tmp_path: Path) -> None:
+    settings = Settings.from_env(_env(tmp_path))
+    twin_app = TwinLab.from_settings(settings, executor=FakeExecutor().on(_twin_scripted))
+    verify_app = NetVerify.from_settings(settings, executor=make_fake())
+    scenario = SCENARIOS[0]
+    async with (
+        memory_session(build_twinlab(twin_app)) as twin_s,
+        memory_session(build_netverify(verify_app)) as verify_s,
+    ):
+        for failures, expect_error in ((1, False), (99, True)):
+            verify = _FlakyVerify(verify_s, failures=0)
+            harness = Harness(
+                twin=ToolClient(twin_s, "twinlab"),
+                verify=verify,
+                admin=CallableAdmin(twin_app.inject, twin_app.status),
+                results_dir=tmp_path / f"results{failures}",
+                matrix="unit",
+            )
+            harness.retry_delay = 0
+            await harness.baseline()  # takes its own matrix; the drop happens after the run
+            verify.failures = failures
+            record = await harness.run_one(
+                scenario, RunConfig(name="fake", runner="fake"), 1, FakeAgentRunner(SCENARIOS)
+            )
+            assert verify.timeouts == min(failures, 2)
+            assert record.score.root_cause and record.score.verified
+            if expect_error:  # the record carries the gap; the batch goes on
+                assert record.error == "HarnessCheckFailed: netverify did not answer"
+            else:
+                assert record.error is None and record.score.collateral_free
+            assert harness.existing_run_ids() == {f"{scenario.id}/fake/1"}
+
+
 def _report(passed: bool) -> VerificationReport:
     return VerificationReport(
         passed=passed,

@@ -1,6 +1,6 @@
 ---
 name: nettwin-handoff
-description: Handoff for the NetTwin build as of 2026-09-20 — what is merged (M0-M6), what is in PR (M7), environment facts, decisions, how to run, and the next milestones
+description: Handoff for the NetTwin build as of 2026-09-21 — M0-M9 merged, v1 team rows done (verifier on/off), solo rows running/owed, M10 local runner in PR #15 awaiting Ollama smoke test, resume procedure, lessons
 metadata:
   type: project
 ---
@@ -83,6 +83,82 @@ Live results recorded in `docs/lab-notes.md`: 14 scenarios inject/probe/rollback
 (15 tests, 10 m 14 s); inject → fix → verify → export bundle end to end (48 s); fake agent
 100 % on all four scores over the 14 tier-A scenarios, mean 22 s per run, 13 min 18 s wall
 clock (M6).
+
+## Session 2026-09-21 handoff (v1 ablation rows in progress, M10 code in PR #15)
+
+Main is 03a1eb2 (M0-M9 merged, PRs #1-#14). Two branches carry this session's work:
+
+- MATRIX v1 COMPLETE. `bench/v1-ablation-rows` = PR #16 (opened 2026-09-21 ~21:20 local; squash-merge once CI is green, then `git checkout main && git pull`). It was the branch (checked out in C:/dev/NetTwin) where commit 28fdbd0 held the
+  verifier-off team row, plus the lab-notes and handoff docs; pushed to origin, no PR yet).
+  The solo row started at 19:30 UTC on 2026-09-21 from the previous chat's background task (it
+  dies with that chat; completed runs stay recorded, a planted fault needs `uv run nettwin lab
+  golden` before the next batch, and the same command resumes by run id) and appends to results/v1/runs.jsonl in this working tree; commit it on this
+  branch when it finishes, then run the last row, then push and open one results PR with
+  the docs/lab-notes.md analysis (section "Ablation: the team without its verifier" is
+  already written and uncommitted; docs/handoff.md mirrors this memory file).
+- M10 smoke test started 21:20 local 2026-09-21 from the worktree (`cd .claude/worktrees/agent-a3c23ca2a6eac06f3 && uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo --scenarios 001 --matrix local-smoke`); delete `results/local-smoke` in the worktree afterwards.
+- `feat/local-agent` = PR #15 (M10: netbench.local_agent, `--runner local`, ToolClient.list_tools,
+  12 unit tests, `.claude/worktrees/` gitignored). CI green at 80bb530. Not merged: it has never
+  talked to a real Ollama. Before merging: with NO Claude batch running, servers in bench mode,
+  smoke test `uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo
+  --scenarios 001 --matrix local-smoke` (check the `tool_name` field on tool messages and the
+  `think` fallback on the first live call), fix on the branch, squash-merge, then
+  `git worktree remove .claude/worktrees/agent-a3c23ca2a6eac06f3` (the agent's worktree, still
+  present). Then the local matrix (qwen2.5-coder:7b, qwen3:14b; solo; verifier on/off).
+
+Matrix v1 (Sonnet 5, results/v1/runs.jsonl, golden id e4a6c253d114):
+
+| row | runs | root cause | fix correct | verified | golden | mean s | errors |
+| claude-diagnose-sonnet-p0 | 8 | 75 % | 88 % | 75 % | 83 % | 861 | 1 |
+| claude-diagnose-sonnet (team, verifier) | 22 | 91 % | 95 % | 91 % | 82 % | 393 | 1 |
+| claude-diagnose-sonnet-noverify | 22 | 82 % | 95 % | 0 % | 82 % | 152 | 0 |
+| claude-diagnose-solo-sonnet | 22 | 82 % | 95 % | 91 % | 77 % | 225 | 1 (018 RunTimeout) |
+| claude-diagnose-solo-sonnet-noverify-diagonly | 22 | 91 % | 5 % | 0 % | 5 % | 75 | 0 (skill-text defect: 0 ops applied, kept as evidence) |
+| claude-diagnose-solo-sonnet-noverify | 22 | 82 % | 91 % | 0 % | 77 % | 77 | 0 |
+
+Findings of the verifier-off row (details in lab-notes): median 150 s, no hangs (both CLI
+hangs of the verifier-on rows were inside the verifier subagent). 019 is the headline: the
+team blamed r4's prefix-list for the missing guest NAT on r3, added `permit 10.0.20.0/24`
+so the guest subnet is advertised to the ISP (the route leak the intent policy forbids)
+and reported done; only the harness-side fix_correct/collateral_free caught it. 022
+(control) reported transient flaps on r2 read from the counters left by earlier injections
+and changed nothing. 021 led with the BGP half (r4 bgp.prefix_list) so root cause missed.
+006 took the prefix-list work-around a third time. 007 got its first clean run but bundled
+two extra lines into the op (not golden).
+
+Solo no-verifier defect (found 2026-09-21, fixed in 550b14c on bench/v1-ablation-rows): the
+solo skill said "skip steps 4 and 5" for --no-verifier, but in the solo skill step 4 is the
+change (the team skill's flag correctly skips 5 and 6). The agent obeyed: right cause on
+20 of 22, zero changes applied, about a minute per run. Those 22 records were relabelled
+`claude-diagnose-solo-sonnet-noverify-diagonly` (a diagnose-only row, useful as a pure
+diagnosis-accuracy number) and the row is being rerun under the proper name with the fixed
+clause ("still apply the change in step 4, then skip step 5 entirely"). Written up in lab-notes (2becf3f).
+
+Solo row (verifier on) is complete and committed (8aded21, pushed): 22 runs, median 131 s, misses are 001 (blamed r1 for r3's area mismatch and changed r1 to match: fix correct, not the planted cause, not golden), 006 (prefix-list work-around, now 4 of 4 across rows), 019 (right cause, NAT clause order differs from golden), 021 (led with the BGP half), and 018 (RunTimeout: the solo agent hung after 9 tool calls, killed at 1500 s). Solo, defect and harness-retry sections are written in lab-notes (2becf3f). Earlier in the row the harness crashed once: 10 runs recorded (001-010) before at 16:15 local on
+2026-09-21: after the agent had fixed and exported 011, the harness's own post-run
+`reachability_matrix` / `intent_check` on netverify exceeded its MCP timeout (`MCPError:
+Request 'tools/call' timed out`, harness.py run_one lines 174-177) and the batch exited 1
+without recording 011. Servers and containers were healthy afterwards (slow probes, not a
+wedge). Fix to make (small, in the results branch or its own PR): wrap the post-run scoring
+calls in run_one so a timeout records an error record for that run, resets, and continues,
+instead of killing the batch. Meanwhile the row was reset with `nettwin lab golden` and
+relaunched with the same command (resumes at 011). Solo results so far: 001 and 006 not root
+cause / not golden (001 solo: RC False, FIX True, VER True), the other eight clean.
+
+Resume procedure (every new chat): `wsl -d Containerlab -- sleep infinity` in the background,
+`uv run nettwin lab up` (34 s, all checks pass, lands on e4a6c253d114), then in WSL
+`make -C lab serve-bench` in the background (serve.sh keeps both servers in the foreground),
+`claude auth status` must say loggedIn true / max, then the batch in the background with a
+Monitor on results/v1/runs.jsonl (one line per new record). Batches resume by run id.
+`uv run netbench report --matrix v1` renders the table.
+
+Lessons this session: the Bash tool blocks `sleep N; cmd` chains (use Monitor or
+run_in_background); the auto-mode classifier denied a `gh run watch` polling loop, plain
+`gh pr checks N` and `gh run list --branch X` are fine; `cd` into a worktree moves the Bash
+tool's persistent cwd (use absolute paths); reading the admin token needs the heredoc form
+(`wsl.exe -d Containerlab -- bash -s <<'EOF' cat ~/.nettwin/admin.token EOF`), a bare
+`wsl -- cat /home/...` path gets MSYS-rewritten; Ollama and Claude runs must never overlap
+(benchmark timing), so M10 live work waits for the Claude rows.
 
 ## How to run the benchmark today
 

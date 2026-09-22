@@ -13,7 +13,9 @@ You diagnose and fix this alone: no Agent tool, no subagents. Use only the twinl
 netverify MCP tools. Do not use Bash, Read, Write, Edit, Glob, Grep or web tools. Do not
 inject faults and do not approve exports; both belong to the operator.
 
-If `--no-verifier` is among the arguments, skip steps 4 and 5 and never export.
+If `--no-verifier` is among the arguments, still apply the change in step 4, then skip
+step 5 entirely: no netverify calls, no export. Report the change unverified. That is the
+ablation configuration of the benchmark.
 
 ## 1. Baseline
 Read the twinlab resource `lab://topology` (ReadMcpResourceTool with server `twinlab`) and
