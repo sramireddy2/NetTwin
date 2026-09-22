@@ -11,6 +11,7 @@ is a fair comparison: a local model gets exactly what Sonnet gets, no more and n
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Iterable
@@ -26,6 +27,8 @@ from netbench.clients import CallResult, ToolClient
 from netbench.roles import MCP_PREFIX, Role, load_roles, load_skills
 from netbench.runner import RunContext, RunnerUnavailable, RunOutput, collect_calls
 from nettwin_core.models import VerificationReport
+
+log = logging.getLogger("netbench.local")
 
 DEFAULT_OLLAMA = "http://localhost:11434"
 DEFAULT_NUM_CTX = 16384
@@ -97,6 +100,7 @@ class OllamaChat:
         base_url: str = DEFAULT_OLLAMA,
         num_ctx: int = DEFAULT_NUM_CTX,
         timeout: float = 900.0,
+        think: bool = False,
         client: httpx.AsyncClient | None = None,
         transport: Transport | None = None,
     ) -> None:
@@ -109,8 +113,9 @@ class OllamaChat:
         self.prompt_tokens = 0
         self.completion_tokens = 0
         self.requests = 0
-        # qwen3's thinking is far too slow on CPU; None once the server rejected the field.
-        self._think: bool | None = False
+        # qwen3's thinking is slow on CPU but, with it off, the model has answered with a few
+        # tokens and no tool call turn after turn; None once the server rejected the field.
+        self._think: bool | None = think
 
     def payload(
         self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
@@ -137,6 +142,13 @@ class OllamaChat:
         self.requests += 1
         self.prompt_tokens += int(body.get("prompt_eval_count") or 0)
         self.completion_tokens += int(body.get("eval_count") or 0)
+        if not (message.get("content") or message.get("tool_calls")):
+            # qwen3:14b did this three turns running; what Ollama reports about the
+            # generation is the only clue, so keep it in the log and the transcript.
+            meta = {k: body.get(k) for k in ("done_reason", "eval_count", "prompt_eval_count")}
+            log.warning("%s returned an empty message: %s", self.model, meta)
+            message["done_reason"] = body.get("done_reason")
+            message["eval_count"] = body.get("eval_count")
         return message
 
     async def _post(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -190,6 +202,7 @@ class BoundTool:
     description: str
     parameters: dict[str, Any]
     handler: ToolHandler
+    cap: int | None = None  # None: the toolset's cap; 0: never truncated
 
     @property
     def definition(self) -> dict[str, Any]:
@@ -227,7 +240,9 @@ class Toolset:
             )
         if not isinstance(args, dict):
             return f"error: arguments for {name} must be a JSON object"
-        return truncate(await tool.handler(args), self.result_cap)
+        cap = self.result_cap if tool.cap is None else tool.cap
+        text = await tool.handler(args)
+        return truncate(text, cap) if cap else text
 
 
 def truncate(text: str, cap: int) -> str:
@@ -278,6 +293,7 @@ def topology_tool(twin: ToolClient) -> BoundTool:
         ),
         parameters={"type": "object", "properties": {}},
         handler=handler,
+        cap=0,  # cut mid-object, the topology JSON left qwen3:14b answering nothing at all
     )
 
 

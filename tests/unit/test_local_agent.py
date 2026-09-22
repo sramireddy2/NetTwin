@@ -588,3 +588,20 @@ async def test_empty_or_unfinished_answers_are_nudged_at_most_twice() -> None:
     prose = ScriptedChat({"role": "assistant", "content": "Findings: eth1 area mismatch on r3."})
     loop = ToolLoop(OllamaChat("m", transport=prose), Toolset([]), max_turns=6)  # a role loop
     assert (await loop.run("system", "user")).nudges == 0
+
+
+async def test_topology_result_is_never_truncated() -> None:
+    from netbench.local_agent import BoundTool, Toolset
+
+    async def big(args: dict[str, Any]) -> str:
+        return "x" * 500
+
+    tools = Toolset(
+        [
+            BoundTool("read_topology", "", {"type": "object", "properties": {}}, big, cap=0),
+            BoundTool("show", "", {"type": "object", "properties": {}}, big),
+        ],
+        result_cap=100,
+    )
+    assert len(await tools.dispatch("read_topology", {})) == 500
+    assert "[truncated 400 chars]" in await tools.dispatch("show", {})
