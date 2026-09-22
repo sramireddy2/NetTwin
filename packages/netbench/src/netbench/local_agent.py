@@ -86,6 +86,10 @@ class ModelTimeout(RuntimeError):
     """A single model call exceeded the HTTP timeout; the harness records the run as crashed."""
 
 
+class ModelCallFailed(RuntimeError):
+    """The server dropped one request mid-flight; this run failed, the server is still there."""
+
+
 class OllamaChat:
     """Non-streaming `POST /api/chat` with function calling; counts tokens across calls.
 
@@ -165,8 +169,12 @@ class OllamaChat:
             raise ModelTimeout(
                 f"Ollama did not answer within {self.timeout:.0f}s (context {self.num_ctx})"
             ) from exc
-        except httpx.HTTPError as exc:
+        except httpx.ConnectError as exc:
             raise RunnerUnavailable(f"cannot reach Ollama at {self.base_url}: {exc}") from exc
+        except httpx.HTTPError as exc:
+            # A dropped connection after scenario 006 was taken for unavailability once and
+            # stopped a row that had eight scenarios left. It is one failed run.
+            raise ModelCallFailed(f"Ollama dropped the request: {exc!r}") from exc
         try:
             body = response.json()
         except ValueError as exc:

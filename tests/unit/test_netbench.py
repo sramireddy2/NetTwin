@@ -263,15 +263,13 @@ async def test_http_tool_client_reopens_its_session_and_retries_once() -> None:
             self.reconnects = 0
 
         async def connect(self) -> None:
-            self.session = self.sessions.pop(0)  # type: ignore[assignment]
-
-        async def aclose(self) -> None:
             self.reconnects += 1
+            self.session = self.sessions.pop(0)  # type: ignore[assignment]
 
     client = Fake()
     client.hard_margin = 0.2
     await client.connect()
     result = await client.call("snapshot", timeout=0.1)
     assert result.ok and result.text == "ok"
-    assert client.reconnects == 1 and client.sessions == []
+    assert client.reconnects == 2 and client.sessions == []
     assert [c.tool for c in client.calls] == ["snapshot"]  # the abandoned attempt is not a call
