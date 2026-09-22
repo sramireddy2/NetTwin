@@ -292,6 +292,35 @@ def parse_call(call: Any) -> tuple[str, Any]:
     return name, {} if args is None else args
 
 
+def text_tool_calls(text: str) -> list[dict[str, Any]]:
+    """Tool calls a small model wrote as JSON text instead of using the tool_calls field.
+
+    qwen2.5-coder:7b answered `{"name": "mcp__twinlab__run_show_command", "arguments":
+    {...}}` as plain content on its first live turn; taken as a final answer, that ends the
+    run after one turn. Accept one object or a list, with or without a code fence, in
+    Ollama's `{"function": {...}}` shape or the bare `{"name", "arguments"}` shape.
+    """
+    body = text.strip()
+    if body.startswith("```"):
+        body = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", body)
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return []
+    items = data if isinstance(data, list) else [data]
+    calls: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            return []
+        function = item.get("function") if isinstance(item.get("function"), dict) else item
+        name = function.get("name")
+        if not isinstance(name, str) or not name:
+            return []
+        args = function.get("arguments", function.get("parameters", {}))
+        calls.append({"function": {"name": name, "arguments": args if args is not None else {}}})
+    return calls
+
+
 @dataclass
 class LoopResult:
     final_text: str
@@ -318,7 +347,7 @@ class ToolLoop:
             message = await self.chat.chat(messages, self.tools.definitions)
             messages.append(message)
             text = str(message.get("content") or "")
-            calls = message.get("tool_calls") or []
+            calls = message.get("tool_calls") or text_tool_calls(text)
             if not calls:
                 return LoopResult(text, turn, False, messages)
             for call in calls:

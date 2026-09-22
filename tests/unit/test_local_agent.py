@@ -508,3 +508,34 @@ def test_cli_builds_the_local_row_label_and_config() -> None:
 def test_unknown_skill_is_rejected_up_front() -> None:
     with pytest.raises(ValueError, match="unknown skill"):
         LocalRunner(OllamaChat("m"), roles_dir=ROLES_DIR, skills_dir=SKILLS_DIR, skill="fix-it")
+
+
+def test_tool_calls_written_as_text_are_recognised() -> None:
+    from netbench.local_agent import text_tool_calls
+
+    bare = json.dumps(
+        {
+            "name": "mcp__twinlab__run_show_command",
+            "arguments": {"node": "r1", "cmd": "show ip ospf"},
+        }
+    )
+    assert text_tool_calls(bare) == [
+        {
+            "function": {
+                "name": "mcp__twinlab__run_show_command",
+                "arguments": {"node": "r1", "cmd": "show ip ospf"},
+            }
+        }
+    ]
+    fence = "`" * 3
+    fenced = (
+        fence
+        + "json"
+        + chr(10)
+        + json.dumps([{"function": {"name": "read_topology", "arguments": {}}}])
+        + chr(10)
+        + fence
+    )
+    assert [c["function"]["name"] for c in text_tool_calls(fenced)] == ["read_topology"]
+    assert text_tool_calls("Root cause: r3 area mismatch.") == []
+    assert text_tool_calls(json.dumps({"root_cause": {"node": "r3"}, "change_ids": []})) == []
