@@ -23,7 +23,7 @@ flowchart TB
     L2 & L3 & POL --> CA
   end
   subgraph MCP["MCP boundary (typed tools, no shell)"]
-    NL[netlab<br/>run_show_command, apply_config,<br/>snapshot, rollback, inject_fault,<br/>lab://topology, export_change]
+    NL[twinlab<br/>run_show_command, apply_config,<br/>snapshot, rollback, export_change,<br/>lab://topology, export_change]
     NV[netverify<br/>reachability_matrix, route_diff,<br/>intent_check, signed attestation]
     SS[(snapshot store<br/>content-addressed)]
   end
@@ -48,13 +48,13 @@ flowchart TB
 Three layers, one direction of trust:
 
 - **Agents are untrusted.** They reason and call tools. They never get a shell, a docker socket, or a file path.
-- **MCP servers are trusted code.** `netlab` owns the twin and every mutation. `netverify` owns judgement.
+- **MCP servers are trusted code.** `twinlab` owns the twin and every mutation. `netverify` owns judgement.
   Both validate inputs with pydantic and execute commands as argv lists via `docker exec`, never through a shell.
 - **The twin is disposable.** Roll back to golden or redeploy at will.
 
 The verifier and `netverify` form an independent path. The verifier's only tools are `netverify`'s. `netverify`
 computes everything from live container state or from snapshots whose IDs are content hashes written by
-`netlab`, so an agent cannot hand it a flattering "before" and "after".
+`twinlab`, so an agent cannot hand it a flattering "before" and "after".
 
 ### One incident, end to end
 
@@ -63,7 +63,7 @@ sequenceDiagram
   participant H as Harness or operator
   participant O as Orchestrator
   participant A as Agents
-  participant NL as netlab
+  participant NL as twinlab
   participant NV as netverify
   participant T as Twin
   H->>NL: inject_fault(scenario) (benchmark only)
@@ -121,7 +121,7 @@ Owns: the reference topology, golden configs, container image, lab lifecycle.
 
 Done when: `make up && make check` passes from cold in under two minutes.
 
-### Part 1. `netlab` MCP server
+### Part 1. `twinlab` MCP server
 
 Owns: every read and every write to the twin. Streamable HTTP transport, one process owns the lab.
 
@@ -156,7 +156,7 @@ Owns: judgement. Separate process, separate codebase directory, read-only docker
   `bgp_established(pairs)`, `no_route_leak(node, prefixes)`.
 - `wait_converged(timeout)`: polls OSPF/BGP state until stable. Every check calls this first.
 - On an all-pass result it returns an `attestation` = HMAC(snapshot_id, policy hash, timestamp) with a key
-  shared with `netlab`. That is what lets `netlab` refuse to export unverified changes without trusting the
+  shared with `twinlab`. That is what lets `twinlab` refuse to export unverified changes without trusting the
   orchestrator.
 
 Done when: injecting each fault turns the matching intent rule red and golden turns it green.
@@ -234,7 +234,7 @@ Cut from the bottom if time runs out. A 10-scenario benchmark with real numbers 
 | Twin technology | containerlab + FRR; Batfish only (static); GNS3/EVE-NG with vendor images | containerlab + FRR | real protocols and a real data plane, free, scriptable. Vendor images add licensing and minutes of boot time. Batfish alone has no data plane, so MTU and NAT faults are invisible |
 | Where the lab runs | Docker Desktop; WSL2 distro with native Docker engine; Linux VM | WSL2 + native engine (containerlab WSL distro) | containerlab wires veth pairs between container netns and needs the engine in the same distro. Docker Desktop hides the containers in its own VM |
 | Snapshot mechanism | running-config + kernel state capture; `docker checkpoint` (CRIU); redeploy the lab | config + kernel state | seconds not minutes, works with plain docker. CRIU is fragile. Snapshot = per node `show running-config`, `ip -j addr/link/route`, `nft list ruleset`, hashed to an ID. Rollback = `frr-reload.py` against the saved config + replay of kernel state |
-| MCP transport | stdio per client; streamable HTTP | HTTP for `netlab`, either for `netverify` | the twin is one shared resource. One `netlab` process holds the write lock. Claude Code on Windows reaches it at `localhost` through WSL2 port forwarding |
+| MCP transport | stdio per client; streamable HTTP | HTTP for `twinlab`, either for `netverify` | the twin is one shared resource. One `twinlab` process holds the write lock. Claude Code on Windows reaches it at `localhost` through WSL2 port forwarding |
 | Who is the MCP host | Claude Code / Claude Desktop; Claude Agent SDK; own loop on the Messages API; pydantic-ai | own loop | the benchmark needs fresh contexts per role, per-role tool allowlists, transcript capture, token accounting, and an auto-answering elicitation callback. That is about 200 lines and you control all of it. The SDK tool runner is a fine substitute if you stay Claude-only |
 | `apply_config` input | full replacement config; unified diff; list of typed ops | typed ops | full configs burn tokens and invite unrelated rewrites, diffs are fragile to apply, typed ops are validatable, loggable, and the same type drives `inject_fault` and `expected_fix`. The server still emits a real running-config diff for the export |
 | Data-plane policy | FRR only (ACLs as route filters); nftables in a custom image | nftables, custom image | FRR access-lists filter routes, not packets. ACL ordering and NAT scenarios need a packet filter. Costs one Dockerfile |

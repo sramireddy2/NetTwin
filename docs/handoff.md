@@ -86,9 +86,9 @@ clock (M6).
 
 ## Session 2026-09-21 handoff (v1 ablation rows in progress, M10 code in PR #15)
 
-Main is 03a1eb2 (M0-M9 merged, PRs #1-#14). Two branches carry this session's work:
+Main is 287e517 (M0-M10 code merged: matrix v1 PR #16, README results PR #17, local runner PR #15 on 2026-09-21 ~22:10 local). Remaining: local matrix runs, README local row, docs cleanup PR, worktree removal. Details:
 
-- MATRIX v1 COMPLETE. `bench/v1-ablation-rows` = PR #16 (opened 2026-09-21 ~21:20 local; squash-merge once CI is green, then `git checkout main && git pull`). It was the branch (checked out in C:/dev/NetTwin) where commit 28fdbd0 held the
+- MATRIX v1 COMPLETE and MERGED: PR #16 squash-merged 2026-09-21 ~20:45 local, main = f0489d2, working tree on main and clean. (History: the branch `bench/v1-ablation-rows` is where commit 28fdbd0 held the
   verifier-off team row, plus the lab-notes and handoff docs; pushed to origin, no PR yet).
   The solo row started at 19:30 UTC on 2026-09-21 from the previous chat's background task (it
   dies with that chat; completed runs stay recorded, a planted fault needs `uv run nettwin lab
@@ -96,15 +96,9 @@ Main is 03a1eb2 (M0-M9 merged, PRs #1-#14). Two branches carry this session's wo
   branch when it finishes, then run the last row, then push and open one results PR with
   the docs/lab-notes.md analysis (section "Ablation: the team without its verifier" is
   already written and uncommitted; docs/handoff.md mirrors this memory file).
-- M10 smoke test started 21:20 local 2026-09-21 from the worktree (`cd .claude/worktrees/agent-a3c23ca2a6eac06f3 && uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo --scenarios 001 --matrix local-smoke`); delete `results/local-smoke` in the worktree afterwards.
-- `feat/local-agent` = PR #15 (M10: netbench.local_agent, `--runner local`, ToolClient.list_tools,
-  12 unit tests, `.claude/worktrees/` gitignored). CI green at 80bb530. Not merged: it has never
-  talked to a real Ollama. Before merging: with NO Claude batch running, servers in bench mode,
-  smoke test `uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo
-  --scenarios 001 --matrix local-smoke` (check the `tool_name` field on tool messages and the
-  `think` fallback on the first live call), fix on the branch, squash-merge, then
-  `git worktree remove .claude/worktrees/agent-a3c23ca2a6eac06f3` (the agent's worktree, still
-  present). Then the local matrix (qwen2.5-coder:7b, qwen3:14b; solo; verifier on/off).
+- M11 part 1 DONE: README results section (v1 table, five findings, limitations) merged as PR #17, main = 28557a6. Remaining M11: local-model row in the README once the Ollama matrix exists, demo recording.
+- M10 smoke tests (2026-09-21 evening, qwen2.5-coder:7b, scenario 001, from the worktree `cd .claude/worktrees/agent-a3c23ca2a6eac06f3`): test 1 ran one turn (the model wrote its tool call as JSON text; fixed with `text_tool_calls`, 041349a). test 2 ran ~8 turns in 50 min, the context filled to the 16 k window (Ollama server.log `n_tokens` 14.5k-16k), one call exceeded the 900 s HTTP timeout and was mis-mapped to RunnerUnavailable (matrix stopped, nothing recorded, no transcript). Fixed (commit after 041349a): `ModelTimeout` is a run failure, partial transcripts are saved in `finally`, `--result-cap` CLI option. Test 3 started ~21:55 local with `--max-turns 20 --result-cap 3000` (delete results/local-smoke in the worktree before any rerun). CPU reality: about 5 min per model turn at 14-16 k context, so a 22-scenario local row is a multi-hour background job; consider tier A only (001-014) and `--max-turns 20` for the local matrix, and note it in the README limitations.
+- PR #15 (M10 local runner) MERGED as 287e517. The agent worktree `.claude/worktrees/agent-a3c23ca2a6eac06f3` (branch feat/local-agent, local only now) still exists because smoke test 3 runs from it; afterwards `git -C C:/dev/NetTwin worktree remove --force .claude/worktrees/agent-a3c23ca2a6eac06f3 && git -C C:/dev/NetTwin branch -D feat/local-agent`. From then on run local rows from the main tree: `uv run netbench run --runner local --model qwen2.5-coder:7b --skill diagnose-solo --scenarios 001-014 --matrix local --max-turns 20 --result-cap 3000` (never while a Claude batch runs).
 
 Matrix v1 (Sonnet 5, results/v1/runs.jsonl, golden id e4a6c253d114):
 
