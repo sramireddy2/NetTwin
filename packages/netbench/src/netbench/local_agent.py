@@ -69,6 +69,12 @@ functions named mcp__<server>__<tool>; call them instead of describing commands.
 are done, answer with exactly the output your instructions ask for.
 """
 
+MAX_NUDGES = 2
+NUDGE = (
+    "Continue. Either call a tool now or finish with the incident report, ending with the "
+    "JSON line the instructions require. Do not answer with an empty message."
+)
+
 Transport = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 ToolHandler = Callable[[dict[str, Any]], Awaitable[str]]
 
@@ -337,22 +343,27 @@ class LoopResult:
     hit_max_turns: bool
     messages: list[dict[str, Any]]
     text_calls: int = 0  # tool calls the model wrote as text rather than as tool_calls
+    nudges: int = 0  # empty or unfinished answers the loop pushed back on
 
 
 class ToolLoop:
     """chat -> run the tool calls -> append their results, until the model answers in text."""
 
-    def __init__(self, chat: OllamaChat, tools: Toolset, *, max_turns: int) -> None:
+    def __init__(
+        self, chat: OllamaChat, tools: Toolset, *, max_turns: int, expect_report: bool = False
+    ) -> None:
         self.chat = chat
         self.tools = tools
         self.max_turns = max_turns
         self.messages: list[dict[str, Any]] = []
         self.turns = 0
         self.text_calls = 0
+        self.nudges = 0
+        self.expect_report = expect_report
 
     def partial(self) -> LoopResult:
         """Whatever has happened so far, for the transcript of a run that did not finish."""
-        return LoopResult("", self.turns, False, self.messages, self.text_calls)
+        return LoopResult("", self.turns, False, self.messages, self.text_calls, self.nudges)
 
     async def run(self, system: str, user: str) -> LoopResult:
         messages = self.messages = [
@@ -369,12 +380,23 @@ class ToolLoop:
             if calls and not message.get("tool_calls"):
                 self.text_calls += 1
             if not calls:
-                return LoopResult(text, turn, False, messages, self.text_calls)
+                if self.nudges < MAX_NUDGES and self.unfinished(text):
+                    # qwen3:14b answered its second turn with nothing at all; small models
+                    # also stop in prose before the report. Push back, at most twice.
+                    self.nudges += 1
+                    messages.append({"role": "user", "content": NUDGE})
+                    continue
+                return LoopResult(text, turn, False, messages, self.text_calls, self.nudges)
             for call in calls:
                 name, args = parse_call(call)
                 result = await self.tools.dispatch(name, args)
                 messages.append({"role": "tool", "tool_name": name, "content": result})
-        return LoopResult(text, self.max_turns, True, messages, self.text_calls)
+        return LoopResult(text, self.max_turns, True, messages, self.text_calls, self.nudges)
+
+    def unfinished(self, text: str) -> bool:
+        if not text.strip():
+            return True
+        return self.expect_report and '"root_cause"' not in text
 
 
 class LocalRunner:
@@ -435,7 +457,10 @@ class LocalRunner:
         else:
             tools = available
         loop = ToolLoop(
-            self.chat, Toolset(tools, result_cap=self.result_cap), max_turns=self.max_turns
+            self.chat,
+            Toolset(tools, result_cap=self.result_cap),
+            max_turns=self.max_turns,
+            expect_report=True,
         )
         result: LoopResult | None = None
         try:
@@ -525,6 +550,7 @@ class LocalRunner:
             "turns": result.turns,
             "hit_max_turns": result.hit_max_turns,
             "text_calls": result.text_calls,
+            "nudges": result.nudges,
             "messages": result.messages,
             "subagents": launches,
         }
@@ -565,6 +591,8 @@ class LocalRunner:
             notes += " launched=" + ",".join(str(launch["subagent_type"]) for launch in launches)
         if result.text_calls:
             notes += f" text_calls={result.text_calls}"
+        if result.nudges:
+            notes += f" nudges={result.nudges}"
         if result.hit_max_turns:
             notes += " max_turns_hit"
         if report is None:
