@@ -58,7 +58,7 @@ flowchart TB
 | Solo agent without the verifier | 82% | 91% | 0% | 77% | 72 | 0 |
 | Local qwen2.5-coder:7b, solo, verifier on (tier A, 14 scenarios, CPU) | 0% | 0% | 0% | 0% | 866 | 1 |
 
-What the numbers say (details and transcript excerpts in [docs/lab-notes.md](docs/lab-notes.md)):
+What the numbers say (details in [docs/lab-notes.md](docs/lab-notes.md); [docs/demo.md](docs/demo.md) replays one incident step by step with and without the verifier):
 
 - **The verifier is the gate, not a formality.** Without it, both configurations "fixed" a missing guest NAT rule by adding the guest subnet to the ISP-facing prefix-list, which is the exact route leak the intent policy forbids, and reported the incident closed. With the verifier on, no wrong fix reached the export gate; the one wrong fix it saw was rolled back and retried.
 - **The team buys accuracy with time.** Three parallel investigators plus a change agent find the planted cause on 20 of 22 scenarios against 18 for one agent doing everything, at about twice the wall clock. The solo agent twice picked the wrong end of a mismatched link and reconfigured the healthy router to match the broken one: service restored, design inverted, verifier satisfied.
