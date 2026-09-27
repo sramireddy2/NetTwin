@@ -18,6 +18,18 @@ Design and rationale live in [design.md](design.md).
 | M10 | `feat/local-agent` | provider-agnostic loop on Ollama, local baseline matrix | local matrix complete |
 | M11 | `chore/readme-results` | README results, recording, limitations | published |
 
+## Status (2026-09-26)
+
+- M0 to M8 merged (PRs #1 to #10; #6 was closed with its stacked base and reopened as #7).
+- M9 merged (#11 to #14). Matrix v1 on Sonnet 5 is complete: team and solo, verifier on and
+  off, 22 scenarios each, plus two evidence rows kept for the write-up (#16).
+- M10 merged (#15). The first local row, qwen2.5-coder:7b on tier A, is recorded, together
+  with the harness fixes that a slow agent exposed (#19 to #26). qwen3:14b is being tried on
+  single scenarios with thinking enabled.
+- M11: README results (#17), design naming (#18), `netbench timeline` and the demo page
+  [demo.md](demo.md) (#27). Still open: a screen recording of an interactive `/diagnose` run,
+  which needs an operator at the desktop app.
+
 ## Runtime split
 
 - WSL2 (Containerlab distro): docker, containerlab, the lab, both MCP servers, all runtime state in `~/.nettwin`.
