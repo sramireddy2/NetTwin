@@ -548,7 +548,11 @@ Row `local-diagnose-solo-qwen2.5-coder-7b`, tier A (001 to 014), verifier on:
   empty messages after the topology read, three turns in a row and again after nudges; a
   direct probe with a short prompt produced tool calls, so the failure is prompt-size
   dependent. With thinking enabled it produced tool calls in the probe at roughly 5 minutes
-  per turn. A single-scenario run with `--think` is recorded separately.
+  per turn, but a real run on 001 (row `local-diagnose-solo-qwen3-14b-think`) took
+  1 h 48 min for four turns: the topology read, an empty 17-token reply that needed a
+  nudge, two show commands, and then a generation that exceeded the 15-minute call limit
+  (recorded as `ModelTimeout`). On this CPU a 14B thinking model cannot finish one
+  scenario, so there is no qwen3 row.
 - What the row cost the harness: four batch deaths, all in the harness rather than the
   model, each fixed and merged the same day: a dropped Ollama request mapped to
   "runner unavailable" (now a per-run failure), the harness's own MCP sessions wedging after

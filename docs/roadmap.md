@@ -24,8 +24,8 @@ Design and rationale live in [design.md](design.md).
 - M9 merged (#11 to #14). Matrix v1 on Sonnet 5 is complete: team and solo, verifier on and
   off, 22 scenarios each, plus two evidence rows kept for the write-up (#16).
 - M10 merged (#15). The first local row, qwen2.5-coder:7b on tier A, is recorded, together
-  with the harness fixes that a slow agent exposed (#19 to #26). qwen3:14b is being tried on
-  single scenarios with thinking enabled.
+  with the harness fixes that a slow agent exposed (#19 to #26). qwen3:14b with thinking was
+  tried on 001 and dropped: four turns in 1 h 48 min, then a model timeout.
 - M11: README results (#17), design naming (#18), `netbench timeline` and the demo page
   [demo.md](demo.md) (#27). Still open: a screen recording of an interactive `/diagnose` run,
   which needs an operator at the desktop app.
