@@ -298,3 +298,38 @@ async def test_http_tool_client_holds_each_session_in_its_own_task(tmp_path: Pat
     assert InMemory.opened == 2 and first is not None
     await client.aclose()
     assert first.done() and client._holder is None
+
+
+async def test_a_failed_injection_skips_the_run_and_the_next_invocation_retries_it(
+    tmp_path: Path,
+) -> None:
+    settings = Settings.from_env(_env(tmp_path))
+    twin_app = TwinLab.from_settings(settings, executor=FakeExecutor().on(_twin_scripted))
+    verify_app = NetVerify.from_settings(settings, executor=make_fake())
+    first, second = SCENARIOS[0], SCENARIOS[1]
+    failures = {"left": 1}
+
+    async def flaky_inject(scenario_id: str) -> dict:
+        if scenario_id == first.id and failures["left"]:
+            failures["left"] -= 1
+            raise TimeoutError("admin inject timed out")
+        return await twin_app.inject(scenario_id)
+
+    async with (
+        memory_session(build_twinlab(twin_app)) as twin_s,
+        memory_session(build_netverify(verify_app)) as verify_s,
+    ):
+        harness = Harness(
+            twin=ToolClient(twin_s, "twinlab"),
+            verify=ToolClient(verify_s, "netverify"),
+            admin=CallableAdmin(flaky_inject, twin_app.status),
+            results_dir=tmp_path / "results",
+            matrix="unit",
+        )
+        config = RunConfig(name="fake", runner="fake")
+        runner = FakeAgentRunner(SCENARIOS)
+        records = await harness.run_matrix([first, second], config, runner)
+        assert [r.scenario_id for r in records] == [second.id]
+        again = await harness.run_matrix([first, second], config, runner)
+        assert [r.scenario_id for r in again] == [first.id]
+        assert harness.existing_run_ids() == {f"{first.id}/fake/1", f"{second.id}/fake/1"}

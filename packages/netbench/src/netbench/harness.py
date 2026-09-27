@@ -22,6 +22,10 @@ from nettwin_core.scenario import Scenario
 log = logging.getLogger("netbench")
 
 
+class HarnessStepFailed(RuntimeError):
+    """The harness could not prepare a run (reset, inject, convergence); nothing was scored."""
+
+
 class RunConfig(BaseModel):
     name: str = Field(description="Row label in the report, e.g. fake, claude-sonnet-verifier")
     runner: str
@@ -168,10 +172,15 @@ class Harness:
     ) -> RunRecord:
         rid = run_id(scenario.id, config, trial)
         if self.golden_snapshot is None:
-            await self.baseline()
-        await self.reset()
-        await self.admin.inject(scenario.id)
-        await self.verify.call("wait_converged", {"timeout": 30})
+            await self.baseline()  # a planted twin must stop the matrix, so no guard here
+        try:
+            await self.reset()
+            await self.admin.inject(scenario.id)
+            await self.verify.call("wait_converged", {"timeout": 30})
+        except RunnerUnavailable:
+            raise
+        except Exception as exc:  # noqa: BLE001 - the agent never started; nothing to score
+            raise HarnessStepFailed(f"preparing {rid}: {type(exc).__name__}: {exc}") from exc
         self.twin.calls.clear()
         self.verify.calls.clear()
         started = datetime.now(UTC)
@@ -232,7 +241,10 @@ class Harness:
             error=error,
         )
         self.append(record)
-        await self.reset()
+        try:
+            await self.reset()
+        except Exception as exc:  # noqa: BLE001 - the next run resets again before it starts
+            log.warning("reset after %s failed: %s", rid, exc)
         log.info(
             "%s: root_cause=%s fix_correct=%s verified=%s collateral_free=%s minimal=%s "
             "golden=%s (%.0fs)",
@@ -258,6 +270,7 @@ class Harness:
     ) -> list[RunRecord]:
         done = self.existing_run_ids()
         records: list[RunRecord] = []
+        skipped: list[str] = []
         for trial in range(1, trials + 1):
             for scenario in scenarios:
                 if max_runs is not None and len(records) >= max_runs:
@@ -266,5 +279,13 @@ class Harness:
                 if rid in done:
                     log.info("skip %s (already recorded)", rid)
                     continue
-                records.append(await self.run_one(scenario, config, trial, runner))
+                try:
+                    records.append(await self.run_one(scenario, config, trial, runner))
+                except HarnessStepFailed as exc:
+                    # An admin call that timed out while planting 017 once ended a batch with
+                    # six scenarios to go. Unrecorded, the run is retried on the next invocation.
+                    log.error("skipped %s, will retry on the next run: %s", rid, exc)
+                    skipped.append(rid)
+        if skipped:
+            log.warning("%d runs skipped for harness failures: %s", len(skipped), skipped)
         return records
