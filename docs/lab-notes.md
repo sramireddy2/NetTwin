@@ -411,11 +411,12 @@ subagent, no export), all 22 scenarios, row `claude-diagnose-sonnet-noverify`:
   cache-read tokens per run; $11.48 by the CLI's own price estimate for the whole row.
 - 17 of 22 scored on every axis with the golden state restored, including five of the six
   VLAN and nftables faults.
-- 019 (guest NAT missing on r3) is what the ablation exists to show. The team blamed r4's
-  prefix-list, added `permit 10.0.20.0/24` to it so the guest subnet would be redistributed
+- 019 (guest masquerade rule missing from r4's nftables NAT table) is what the ablation
+  exists to show. The team looked at the right router and blamed the wrong mechanism: r4's
+  BGP prefix-list. It added `permit 10.0.20.0/24` so the guest subnet would be redistributed
   into BGP and advertised to the ISP, and reported the incident closed. That is the route
-  leak the intent policy forbids (`no_route_leak`), applied as a fix: wrong node, wrong
-  layer, the fault still planted and collateral on the ISP. With the verifier on, the same
+  leak the intent policy forbids (`no_route_leak`), applied as a fix: right node, wrong
+  component and layer, the fault still planted and collateral on the ISP. With the verifier on, the same
   scenario was diagnosed correctly; had this change been proposed there, `intent_check`
   would have failed it and forced the rollback-and-retry loop. Without the verifier there is
   no loop and no gate. `fix_correct` and `collateral_free` are what caught it, and they run

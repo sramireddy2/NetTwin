@@ -24,6 +24,7 @@ from netbench.local_agent import (
 )
 from netbench.report import load_records, render
 from netbench.runner import FakeAgentRunner, ManualRunner, Runner, RunnerUnavailable
+from netbench.timeline import build_timeline, render_markdown
 from nettwin_core.scenario import load_scenarios
 
 app = typer.Typer(no_args_is_help=True, help="NetBench: scenarios in, scores out.")
@@ -194,6 +195,21 @@ def report(
 ) -> None:
     """Render summary and per-scenario tables from results/<matrix>/runs.jsonl."""
     text = render(load_records(results / matrix / "runs.jsonl"), matrix)
+    typer.echo(text)
+    if write is not None:
+        write.parent.mkdir(parents=True, exist_ok=True)
+        write.write_text(text, encoding="utf-8")
+
+
+@app.command()
+def timeline(
+    transcript: Path = typer.Argument(..., help="A stream-json transcript under results/"),
+    title: str | None = typer.Option(None, help="Heading; defaults to the file name"),
+    write: Path | None = typer.Option(None, help="Also write the markdown here"),
+) -> None:
+    """Replay one Claude Code run as a markdown incident timeline, agent by agent."""
+    lines = transcript.read_text(encoding="utf-8").splitlines()
+    text = render_markdown(build_timeline(lines), title or transcript.stem)
     typer.echo(text)
     if write is not None:
         write.parent.mkdir(parents=True, exist_ok=True)
