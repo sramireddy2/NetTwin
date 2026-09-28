@@ -525,25 +525,36 @@ tools become Ollama functions, role allowlists filter them, the skill body is th
 prompt, and `launch_agent` stands in for the Agent tool in team mode. CPU only (Intel iGPU
 unused, 32 GB RAM), `num_ctx` 16384, tool results capped at 3000 characters, 20 turns.
 
-Row `local-diagnose-solo-qwen2.5-coder-7b`, tier A (001 to 014), verifier on:
+Row `local-diagnose-solo-qwen2.5-coder-7b`, all 22 scenarios, verifier on (tier A on
+2026-09-22; tiers B and C, the stretch and the control on 2026-09-26 and 27):
 
 | Config | Runs | Root cause | Fix correct | Verified | No collateral | Minimal | Errors | Mean s | Golden |
 |---|---|---|---|---|---|---|---|---|---|
-| local-diagnose-solo-qwen2.5-coder-7b | 14 | 0% | 0% | 0% | 36% | 0% | 1 | 951 | 0% |
+| local-diagnose-solo-qwen2.5-coder-7b | 22 | 5% | 5% | 0% | 32% | 5% | 2 | 1087 | 5% |
 | claude-diagnose-solo-sonnet (same skill) | 22 | 82% | 95% | 91% | 95% | 91% | 1 | 225 | 77% |
 
-- Zero on every axis. In 14 runs the 7B model made 260 tool calls: 243 show commands, 10
-  snapshots, 7 topology reads, not one `apply_config`, not one final report. Every run used
-  its 20 turns reading and then stopped. It never repaired anything, so it also never broke
-  anything; the 36 % "no collateral" is the five scenarios whose planted fault happens not to
-  show in the reachability matrix.
+- Zero on every fault. In 22 runs the 7B model made 404 tool calls: 374 show commands, 18
+  snapshots, 12 topology reads, not one `apply_config`, not one final report. Every run that
+  did not time out used its 20 turns reading and then stopped. It never repaired anything, so
+  it also never broke anything. Its 5 % on root cause, fix, minimal and golden is the no-fault
+  control (022), where "no cause, no change" is the right answer and a model that never
+  reports and never changes passes by construction; the 32 % "no collateral" is that control
+  plus the six scenarios whose planted fault happens not to show in the reachability matrix.
+- Where it looked: 331 of the 374 show commands were OSPF or routing-table reads, and it
+  never listed an nftables ruleset, not even on the three nftables scenarios (018 to 020).
+  It sweeps one command across the nodes in turn (`show ip route` on r1 to r4 and the ISP,
+  then `show ip ospf neighbor` on each, on 022 even on the hosts and the switch) instead of
+  following a lead, and on 020 it spent its last thirteen turns cycling two OSPF interface
+  commands on r2 and r3. On 016 it ran `bridge vlan show` on sw1, whose 284-character answer
+  shows the trunk toward r3 carrying VLAN 10 but not VLAN 20, the planted fault in full, and
+  moved on to OSPF.
 - Every tool call arrived as JSON text in the message body rather than in Ollama's
-  `tool_calls` field (`text_calls=20` on every run). Without the loop's text fallback the row
-  would have been fourteen one-turn runs.
-- Cost of a CPU baseline: median 866 s per scenario (670 to 1391), 3.7 hours for the row,
-  about 132 k prompt tokens per run because each turn resends the whole context. One run
-  (010) ended in a `ModelTimeout` after a single generation exceeded 15 minutes; it is the
-  row's error.
+  `tool_calls` field (404 of 404). Without the loop's text fallback the row would have been
+  twenty-two one-turn runs.
+- Cost of a CPU baseline: median 915 s per scenario (670 to 2757), 6.6 hours for the row, a
+  median 135 k prompt tokens per run (118 k to 223 k) because each turn resends the whole
+  context. Two runs ended in a `ModelTimeout` after a single generation exceeded 15 minutes,
+  010 on its first turn and 015 on its fifth; they are the row's errors.
 - qwen3:14b was tried first and dropped for this row: with thinking disabled it answered
   empty messages after the topology read, three turns in a row and again after nudges; a
   direct probe with a short prompt produced tool calls, so the failure is prompt-size
@@ -553,11 +564,14 @@ Row `local-diagnose-solo-qwen2.5-coder-7b`, tier A (001 to 014), verifier on:
   nudge, two show commands, and then a generation that exceeded the 15-minute call limit
   (recorded as `ModelTimeout`). On this CPU a 14B thinking model cannot finish one
   scenario, so there is no qwen3 row.
-- What the row cost the harness: four batch deaths, all in the harness rather than the
+- What the row cost the harness: five batch deaths, all in the harness rather than the
   model, each fixed and merged the same day: a dropped Ollama request mapped to
   "runner unavailable" (now a per-run failure), the harness's own MCP sessions wedging after
   idling through a 15-minute run (now a hard time bound on every call and a retry over a
   fresh session), a wedged session's teardown hanging the process for eight hours (the
-  process now exits hard after its summary), and an abandoned session finalised from the
-  wrong task (each session now lives in its own holder task). A fast agent never exposed
-  any of this; a slow one did within hours.
+  process now exits hard after its summary), an abandoned session finalised from the
+  wrong task (each session now lives in its own holder task), and an admin call that timed
+  out while planting 017 (a run whose reset or injection fails is now skipped and retried on
+  the next invocation instead of ending the batch). A fast agent never exposed any of this;
+  a slow one did within hours. The machine added one lesson of its own: an overnight idle
+  sleep stalled a post-run check for 90 minutes, so a long CPU batch needs the PC held awake.
