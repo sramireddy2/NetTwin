@@ -12,7 +12,7 @@
 ![nftables](https://img.shields.io/badge/nftables-NAT%20%26%20filters-FCC624?logo=linux&logoColor=black)
 <br>
 ![MCP](https://img.shields.io/badge/MCP-2%20servers-6E56CF)
-![Claude Code](https://img.shields.io/badge/Claude%20Code-agent%20team-D97757?logo=claude&logoColor=white)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-agent%20runtime-D97757?logo=claude&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-local%20models-111111?logo=ollama&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white)
 ![pytest](https://img.shields.io/badge/pytest-tested-0A9EDC?logo=pytest&logoColor=white)
@@ -22,7 +22,7 @@
 
 Many network outages start with a change: an OSPF area typed wrong, a firewall rule in the wrong place, an MTU that doesn't match the other end of the link. Finding and fixing that is careful work, and nobody wants an AI experimenting on production routers to speed it up.
 
-So NetTwin gives the AI a copy to work on. The copy, the "digital twin", is a small company network that runs in containers on one laptop: five routers running real routing software, a VLAN switch and four hosts. A fault gets planted, a team of Claude agents gets the trouble ticket, and they investigate and repair it the way a network engineer would. A separate verifier then checks the result against the network's rules, and only a verified change is offered to a person for approval. Nothing here ever touches a real device.
+So NetTwin gives the AI a copy to work on. The copy, the "digital twin", is a small company network that runs in containers on one laptop: five routers running real routing software, a VLAN switch and four hosts. A fault gets planted, a team of agents gets the trouble ticket, and they investigate and repair it the way a network engineer would. A separate verifier then checks the result against the network's rules, and only a verified change is offered to a person for approval. Nothing here ever touches a real device.
 
 ## See it work
 
@@ -34,13 +34,13 @@ This is a real run, recorded from the terminal; only the long pauses, where the 
 
 1. **A copy of the network.** [containerlab](https://containerlab.dev) starts ten containers inside WSL2: four routers and an ISP router running [FRRouting](https://frrouting.org) for OSPF and BGP, with nftables for NAT and filtering, a Linux-bridge switch carrying the corporate and guest VLANs, and Alpine hosts for users, a server and "the internet".
 2. **A planted fault.** The benchmark breaks the network on purpose, one of 22 scenarios, through an admin route the agents can't see or call.
-3. **An agent team.** [Claude Code](https://github.com/anthropics/claude-code) subagents take the ticket: an incident commander, three investigators (layer 2, layer 3 and policy) working in parallel, and a change agent. They can only act through two [MCP](https://modelcontextprotocol.io) servers, and every change is a typed, validated operation with a snapshot before and after. There is no shell.
+3. **An agent team.** The agents take the ticket: an incident commander, three investigators (layer 2, layer 3 and policy) working in parallel, and a change agent. They can only act through two [MCP](https://modelcontextprotocol.io) servers, and every change is a typed, validated operation with a snapshot before and after. There is no shell.
 4. **A verifier, then a person.** The verifier starts with a fresh context and sees only the before and after snapshots, the intent policy and the ticket. If every rule passes, the result is signed, and exporting the change still needs an operator's approval.
 
 ```mermaid
 flowchart TB
   SYM([Trouble ticket]) --> IC
-  subgraph HOST["Agent runtime (Claude Code subagents)"]
+  subgraph HOST["Agent team"]
     IC[Incident commander]
     L2[L2 investigator]
     L3[L3 investigator]
@@ -95,13 +95,13 @@ flowchart TB
 |---|---|
 | **The twin** | containerlab 0.79 on Docker in WSL2, FRRouting 10.2 (OSPF, BGP), nftables (NAT and filters), Linux bridge VLANs, Alpine Linux hosts |
 | **The safety boundary** | Two MCP servers written in Python. `twinlab` runs show commands, typed config changes, snapshots, rollback and the export gate; `netverify` checks reachability, route diffs and the intent policy, and signs what passes. It has no write tools at all. |
-| **The agents** | Claude Code subagents and skills (`/diagnose` for the team, `/diagnose-solo` for one agent), run interactively or headless with `claude -p`, plus an Ollama runner that drives local models through the same tools and role files |
+| **The agents** | Five agent role files and two playbooks (`/diagnose` runs the team, `/diagnose-solo` a single agent), run on Claude Code interactively or headless, plus an Ollama runner that drives local models through the same tools and role files |
 | **The benchmark** | NetBench: 22 planted faults (OSPF, BGP, MTU, addressing, VLANs, nftables rule order, NAT, a host firewall, two faults at once, and a no-fault control), scored from the twin's state after each run |
 | **Engineering** | Python 3.12+, a uv workspace of four packages, Pydantic, Typer, httpx, pytest, ruff and GitHub Actions |
 
 ## Results
 
-I ran every scenario once per setup, with Claude Sonnet 5 through the Claude Code CLI and with one local model through Ollama, and scored each run from the twin's actual state afterwards, never from what the agents said they did.
+I ran every scenario once per setup, with Claude Sonnet 5 and with a local model through Ollama, and scored each run from the twin's actual state afterwards, never from what the agents said they did.
 
 | Setup | Found the planted cause | Fix correct | Checked by the verifier | Median time |
 |---|:---:|:---:|:---:|:---:|
@@ -119,7 +119,7 @@ What I took away from it:
 - **Trust the network, not the report.** One early batch scored 91% on root cause and looked like the best setup, but it had fixed almost nothing: a wording slip in the skill told the agent to skip the change step. Scoring from the twin caught it; a self-reported score would have missed it.
 - **A small local model isn't there yet.** With the same tools and instructions, a 7B model on a laptop CPU spent its turns reading show commands and never proposed a change, on any scenario. It never looked at a firewall rule either, even on the three firewall faults. Its only pass was the no-fault control, which doing nothing passes by design.
 
-Honest limits: one run per scenario and setup, so single-scenario differences are anecdotes and only the overall pattern is a result. "Back to the original config" is a text comparison, so an equivalent rule written in another order counts as different. Three of the 96 Claude runs stalled in the CLI and count as errors. The policy layer is nftables and FRR filters, not vendor ACL syntax. The full tables, per-scenario marks and every lesson the lab taught are in [docs/lab-notes.md](docs/lab-notes.md).
+Honest limits: one run per scenario and setup, so single-scenario differences are anecdotes and only the overall pattern is a result. "Back to the original config" is a text comparison, so an equivalent rule written in another order counts as different. Three of the 96 Sonnet runs stalled and count as errors. The policy layer is nftables and FRR filters, not vendor ACL syntax. The full tables, per-scenario marks and every lesson the lab taught are in [docs/lab-notes.md](docs/lab-notes.md).
 
 ## Try it yourself
 
