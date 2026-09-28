@@ -1,17 +1,50 @@
+<div align="center">
+
 # NetTwin
 
-An agentic network troubleshooter that never touches production.
+**AI agents troubleshoot a network on a copy of it, and prove the fix before a person approves it.**
 
-Config changes cause a large share of network outages: a bad ACL, a fat-fingered OSPF area, an MTU mismatch. Engineers cannot safely try fixes on production, and nobody lets an LLM agent loose on real routers. NetTwin puts the agent inside a **digital twin** instead: a containerlab replica of the network running real FRRouting routers. The agent diagnoses the fault there, tests the fix there, and an independent verifier checks the result. Only a verified, human-approved config diff comes out the other end.
+[![CI](https://github.com/sramireddy2/NetTwin/actions/workflows/ci.yml/badge.svg)](https://github.com/sramireddy2/NetTwin/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![FRRouting](https://img.shields.io/badge/FRRouting-10.2-E4572E)
+![containerlab](https://img.shields.io/badge/containerlab-0.79-0A7BBB)
+![Docker](https://img.shields.io/badge/Docker-WSL2-2496ED?logo=docker&logoColor=white)
+![nftables](https://img.shields.io/badge/nftables-NAT%20%26%20filters-FCC624?logo=linux&logoColor=black)
+<br>
+![MCP](https://img.shields.io/badge/MCP-2%20servers-6E56CF)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-agent%20team-D97757?logo=claude&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-local%20models-111111?logo=ollama&logoColor=white)
+![uv](https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white)
+![pytest](https://img.shields.io/badge/pytest-tested-0A9EDC?logo=pytest&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-3DA639)
+
+</div>
+
+Many network outages start with a change: an OSPF area typed wrong, a firewall rule in the wrong place, an MTU that doesn't match the other end of the link. Finding and fixing that is careful work, and nobody wants an AI experimenting on production routers to speed it up.
+
+So NetTwin gives the AI a copy to work on. The copy, the "digital twin", is a small company network that runs in containers on one laptop: five routers running real routing software, a VLAN switch and four hosts. A fault gets planted, a team of Claude agents gets the trouble ticket, and they investigate and repair it the way a network engineer would. A separate verifier then checks the result against the network's rules, and only a verified change is offered to a person for approval. Nothing here ever touches a real device.
+
+## See it work
+
+![A real NetTwin run: the agent team's first fix leaks a route, the verifier rejects it, the team rolls back and restores the missing NAT rule, and the harness scores the run](docs/media/demo-019.svg)
+
+This is a real run, recorded from the terminal; only the long pauses, where the model is thinking, are shortened. The guest VLAN has lost internet access because the NAT rule on the edge router is gone. Three investigators read the network in parallel, and the team's first fix is wrong: it advertises the guest subnet to the ISP, which is a route leak. The verifier catches it, the commander rolls the change back, and the second attempt restores the NAT rule (after twinlab refuses one malformed rule). Only then does the verifier pass and the change get exported. The last block is the harness scoring the run from the twin itself.
+
+## How it works
+
+1. **A copy of the network.** [containerlab](https://containerlab.dev) starts ten containers inside WSL2: four routers and an ISP router running [FRRouting](https://frrouting.org) for OSPF and BGP, with nftables for NAT and filtering, a Linux-bridge switch carrying the corporate and guest VLANs, and Alpine hosts for users, a server and "the internet".
+2. **A planted fault.** The benchmark breaks the network on purpose, one of 22 scenarios, through an admin route the agents can't see or call.
+3. **An agent team.** [Claude Code](https://github.com/anthropics/claude-code) subagents take the ticket: an incident commander, three investigators (layer 2, layer 3 and policy) working in parallel, and a change agent. They can only act through two [MCP](https://modelcontextprotocol.io) servers, and every change is a typed, validated operation with a snapshot before and after. There is no shell.
+4. **A verifier, then a person.** The verifier starts with a fresh context and sees only the before and after snapshots, the intent policy and the ticket. If every rule passes, the result is signed, and exporting the change still needs an operator's approval.
 
 ```mermaid
 flowchart TB
-  SYM([Symptom]) --> IC
+  SYM([Trouble ticket]) --> IC
   subgraph HOST["Agent runtime (Claude Code subagents)"]
     IC[Incident commander]
-    L2[L2 agent]
-    L3[L3 agent]
-    POL[Policy agent]
+    L2[L2 investigator]
+    L3[L3 investigator]
+    POL[Policy investigator]
     CA[Change agent]
     VER[Verifier<br/>fresh context, state only]
     IC --> L2 & L3 & POL
@@ -38,53 +71,90 @@ flowchart TB
   OP --> EXP[Export bundle<br/>diff, root cause, evidence]
   NB[NetBench harness] -->|admin route| NL
   NB --> HOST
+
+  classDef agent fill:#2563eb,stroke:#1e40af,color:#ffffff
+  classDef verify fill:#0e7490,stroke:#155e75,color:#ffffff
+  classDef tool fill:#7c3aed,stroke:#5b21b6,color:#ffffff
+  classDef twin fill:#15803d,stroke:#166534,color:#ffffff
+  classDef human fill:#d97706,stroke:#b45309,color:#ffffff
+  classDef bench fill:#db2777,stroke:#9d174d,color:#ffffff
+  class IC,L2,L3,POL,CA agent
+  class VER verify
+  class NL,NV,SS tool
+  class FRR,SW,H twin
+  class SYM,OP,EXP human
+  class NB bench
+  style HOST fill:none,stroke:#2563eb,stroke-width:2px
+  style MCP fill:none,stroke:#7c3aed,stroke-width:2px
+  style TWIN fill:none,stroke:#15803d,stroke-width:2px
 ```
 
-## What it shows
+## Tech stack
 
-- **Networking.** OSPF, BGP, VLANs, MTU, NAT and packet filters on real routing software (FRRouting on Linux), not a simulation.
-- **MCP as a safety boundary.** Two MCP servers with separate responsibilities. `twinlab` owns the twin and every mutation through typed, validated tools. `netverify` owns judgement and has no write tools at all. The human approval gate is an MCP elicitation raised by the server, so the agent cannot talk its way past it. Fault injection lives on an admin route the agent cannot reach.
-- **Agents, measured.** A commander, three parallel layer investigators, a change agent, and a verifier that runs in a fresh context and only ever sees before and after state plus the intent policy. NetBench plants 22 scenarios (OSPF, BGP, MTU and addressing faults, VLAN faults on the switch and the gateway, nftables rule-order, NAT and host-firewall faults, a two-fault stretch and a no-fault control) and scores root cause, verified fix, collateral damage and minimality across single vs multi-agent, verifier on vs off, and across models.
+| Part | Built with |
+|---|---|
+| **The twin** | containerlab 0.79 on Docker in WSL2, FRRouting 10.2 (OSPF, BGP), nftables (NAT and filters), Linux bridge VLANs, Alpine Linux hosts |
+| **The safety boundary** | Two MCP servers written in Python. `twinlab` runs show commands, typed config changes, snapshots, rollback and the export gate; `netverify` checks reachability, route diffs and the intent policy, and signs what passes. It has no write tools at all. |
+| **The agents** | Claude Code subagents and skills (`/diagnose` for the team, `/diagnose-solo` for one agent), run interactively or headless with `claude -p`, plus an Ollama runner that drives local models through the same tools and role files |
+| **The benchmark** | NetBench: 22 planted faults (OSPF, BGP, MTU, addressing, VLANs, nftables rule order, NAT, a host firewall, two faults at once, and a no-fault control), scored from the twin's state after each run |
+| **Engineering** | Python 3.12+, a uv workspace of four packages, Pydantic, Typer, httpx, pytest, ruff and GitHub Actions |
 
-## Results (NetBench v1, Claude Sonnet 5)
+## Results
 
-22 scenarios, one trial per cell, scored by the harness from the twin's state after each run, never from the agent's own report. Root cause is node plus component against the planted fault; fix correct is the harness's own intent check afterwards; golden is whether the twin's content-addressed snapshot returned to the golden configuration.
+I ran every scenario once per setup, with Claude Sonnet 5 through the Claude Code CLI and with one local model through Ollama, and scored each run from the twin's actual state afterwards, never from what the agents said they did.
 
-| Configuration | Root cause | Fix correct | Verified | Golden | Median s | Errors |
-|---|---|---|---|---|---|---|
-| Team (commander, 3 investigators, change agent, isolated verifier) | 91% | 95% | 91% | 82% | 205 | 1 |
-| Team without the verifier | 82% | 95% | 0% | 82% | 150 | 0 |
-| Solo agent with verifier | 82% | 95% | 91% | 77% | 131 | 1 |
-| Solo agent without the verifier | 82% | 91% | 0% | 77% | 72 | 0 |
-| Local qwen2.5-coder:7b, solo, verifier on (22 scenarios, CPU; its 5 % is the no-fault control) | 5% | 5% | 0% | 5% | 915 | 2 |
+| Setup | Found the planted cause | Fix correct | Checked by the verifier | Median time |
+|---|:---:|:---:|:---:|:---:|
+| Agent team with verifier | **91%** | **95%** | **91%** | 3.4 min |
+| Agent team, verifier off | 82% | 95% | off | 2.5 min |
+| One agent with verifier | 82% | 95% | 91% | 2.2 min |
+| One agent, verifier off | 82% | 91% | off | 1.2 min |
+| Local qwen2.5-coder 7B on a CPU | 0 of 21 faults | 0 of 21 | 0% | 15 min |
 
-What the numbers say (details in [docs/lab-notes.md](docs/lab-notes.md); [docs/demo.md](docs/demo.md) replays one incident step by step with and without the verifier):
+What I took away from it:
 
-- **The verifier is the gate, not a formality.** Without it, both configurations "fixed" a missing guest NAT rule by adding the guest subnet to the ISP-facing prefix-list, which is the exact route leak the intent policy forbids, and reported the incident closed. With the verifier on, no wrong fix reached the export gate; the one wrong fix it saw was rolled back and retried.
-- **The team buys accuracy with time.** Three parallel investigators plus a change agent find the planted cause on 20 of 22 scenarios against 18 for one agent doing everything, at about twice the wall clock. The solo agent twice picked the wrong end of a mismatched link and reconfigured the healthy router to match the broken one: service restored, design inverted, verifier satisfied.
-- **Models have habits.** Every configuration, five times out of five, repaired a missing BGP `network` statement by adding the subnet to a redistribution prefix-list instead: reachable, verified, one line, not the planted cause, not the golden configuration. Scoring root cause and golden separately from fix correct is what makes that visible.
-- **Harness-side scores catch what self-reports hide.** The first solo run without a verifier scored 91 % on root cause and 5 % on fix correct: a wording defect in the skill had told the agent to skip the change step, and it obeyed. A benchmark that trusted the agent's report would have called it the best row.
-- **The local baseline is a floor, not a contender.** A 7B coder model on a CPU, given the same tools and the same skill, read until its 20 turns ran out on every scenario where it did not time out, and never proposed a change: 374 show commands, zero applies, zero reports, in 6.6 hours. Almost nine in ten were OSPF or routing-table reads, even on the three nftables faults, where it never listed a ruleset; its only points are the no-fault control, which a model that changes nothing passes by construction. Its real contribution was to the harness, whose idle MCP sessions and error mapping only broke under a slow agent.
-- **A shared twin leaves footprints.** On the no-fault control, one run reported "transient link flaps this morning", read from interface counters left by earlier scenarios' injections, and correctly changed nothing.
+- **The verifier earns its place.** With the verifier off, both setups "fixed" the missing guest NAT rule by advertising the guest subnet to the ISP. That is a route leak the policy forbids, and both reported the incident closed. With the verifier on, no wrong fix ever reached the approval step; the recording above shows it catching exactly that mistake. [docs/demo.md](docs/demo.md) replays both benchmark runs side by side.
+- **A team is more accurate, one agent is faster.** The team found the planted cause in 20 of 22 scenarios and the single agent in 18, but the single agent took about half as long. Twice it "fixed" a mismatched link by changing the healthy router to match the broken one.
+- **Models have habits.** Every setup, five times out of five, worked around a missing BGP `network` statement instead of restoring it. Traffic flowed and the verifier passed, but it wasn't the actual cause. Scoring the root cause separately from "does it work now" is what makes that visible.
+- **Trust the network, not the report.** One early batch scored 91% on root cause and looked like the best setup, but it had fixed almost nothing: a wording slip in the skill told the agent to skip the change step. Scoring from the twin caught it; a self-reported score would have missed it.
+- **A small local model isn't there yet.** With the same tools and instructions, a 7B model on a laptop CPU spent its turns reading show commands and never proposed a change, on any scenario. It never looked at a firewall rule either, even on the three firewall faults. Its only pass was the no-fault control, which doing nothing passes by design.
 
-Limitations, honestly: one trial per cell, so single-scenario differences are anecdotes and only the row-level pattern is a result; golden is a textual snapshot comparison, so an equivalent nftables rule written in another clause order counts as not golden; the runtime stalled three times in 96 runs (recorded as errors, never retried); Claude runs are metered by a subscription, not the API, so cost is the CLI's estimate; the policy layer is nftables and FRR route filters, not vendor ACL syntax; the local-model axis is one 7B model on a CPU, and a 14B model with thinking could not finish a single scenario on this CPU (four turns in 1 h 48 min, then a timeout).
+Honest limits: one run per scenario and setup, so single-scenario differences are anecdotes and only the overall pattern is a result. "Back to the original config" is a text comparison, so an equivalent rule written in another order counts as different. Three of the 96 Claude runs stalled in the CLI and count as errors. The policy layer is nftables and FRR filters, not vendor ACL syntax. The full tables, per-scenario marks and every lesson the lab taught are in [docs/lab-notes.md](docs/lab-notes.md).
 
-## Status
+## Try it yourself
 
-Everything above runs on the live twin: lab, both MCP servers, the export gate, the Claude Code agent team with the `/diagnose` and `/diagnose-solo` skills, the headless runner and the NetBench matrix. [docs/diagnose.md](docs/diagnose.md) explains how to run and score an incident interactively. The Claude Code desktop app did not surface twinlab's MCP elicitation, so interactive exports stay pending until the operator approves them with `nettwin approve`; the gate holds either way. The local-model runner on Ollama drives the same MCP tools and the same role files as the Claude team; its CPU-only baseline is the last row of the results table.
+You need Windows 11 with WSL2, [uv](https://github.com/astral-sh/uv), and for the agent runs a logged-in Claude Code CLI. [docs/setup-wsl.md](docs/setup-wsl.md) walks through the one-time setup of the Containerlab WSL distro.
 
-See [docs/design.md](docs/design.md) for the architecture, parts, contracts, scenarios, and tradeoffs, and [docs/roadmap.md](docs/roadmap.md) for the milestone plan.
-
-## Layout
-
+```bash
+uv run nettwin doctor     # checks WSL, Docker, containerlab, ports and CLIs
+uv run nettwin lab up     # builds the images if needed and starts the twin
+uv run nettwin serve      # starts twinlab and netverify and stays attached
 ```
-lab/          containerlab topology, golden FRR configs, intent policy, fault scenarios
-packages/     nettwin_core (contracts), twinlab (twin control MCP server),
-              netverify (verification MCP server), netbench (harness and scoring)
-.claude/      agent roles and the /diagnose and /diagnose-solo skills for Claude Code
-results/      NetBench matrices, one JSONL record per run (transcripts are not committed)
-docs/         design, roadmap, lab notes, runbooks
+
+Then break something and hand it to the agents. Plant a fault from a second terminal, open Claude Code in the repo, and paste the ticket:
+
+```bash
+uv run nettwin lab inject 019-nft-nat-missing
 ```
+
+```text
+/diagnose NOC ticket: guest users on VLAN 20 cannot reach the internet although they reach their gateway and the corporate side of the network.
+```
+
+When the verifier passes, the export waits for you: `uv run nettwin approve <export_id>`. [docs/diagnose.md](docs/diagnose.md) covers the whole loop, including scored and headless runs. With the servers in bench mode, `uv run python scripts/record_demo.py 019` records a run like the one above, and `scripts/render_demo.py` turns it into the animation.
+
+## What's in the repo
+
+```text
+lab/        the twin: containerlab topology, golden router configs, intent policy, 22 fault scenarios
+packages/   nettwin_core (shared models), twinlab and netverify (the MCP servers), netbench (harness and scoring)
+.claude/    the agent roles and the /diagnose and /diagnose-solo skills
+results/    every benchmark run, one JSON line each
+scripts/    the demo recorder and renderer, and a PowerShell helper that runs lab targets in WSL
+docs/       design, lab notes, a replayed incident, runbooks
+```
+
+Read more: [design.md](docs/design.md) for the architecture and trade-offs, [lab-notes.md](docs/lab-notes.md) for every result and lesson, [demo.md](docs/demo.md) for one incident with and without the verifier, and [roadmap.md](docs/roadmap.md) for how it was built, milestone by milestone. Every milestone is merged, and CI runs lint and the unit and harness tests on every pull request.
 
 ## License
 

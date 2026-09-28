@@ -1,17 +1,17 @@
 ---
 name: nettwin-handoff
-description: START HERE for NetTwin (2026-09-27 night) — planned build complete: M0-M11 merged, local 7b row 22/22 merged in PR #30; only user decisions remain (screen recording, extra Claude runs); procedure for any further batch
+description: START HERE for NetTwin (2026-09-27 late night) — planned build complete: M0-M11 merged, local row 22/22 (PR #30), README rewritten with a live terminal recording (PR #31); only optional user decisions remain; procedure for any further batch
 metadata:
   type: project
-  modified: 2026-09-28T01:18:45.510Z
+  modified: 2026-09-28T02:45:56.196Z
 ---
 
-# NetTwin handoff — start here (2026-09-27 21:45)
+# NetTwin handoff — start here (2026-09-27 23:00)
 
-Repo `C:\dev\NetTwin`, remote https://github.com/sramireddy2/NetTwin (public). PRs #1 to #30
-merged; #30 is the local row's results PR. The full per-session log, every matrix analysis and
-every lesson is in [[nettwin-history]]; confirmed decisions and the zero-spend plan are in
-[[nettwin-project-context]].
+Repo `C:\dev\NetTwin`, remote https://github.com/sramireddy2/NetTwin (public). PRs #1 to #31
+merged; #30 is the local row's results PR, #31 the README rewrite with the demo recording. The
+full per-session log, every matrix analysis and every lesson is in [[nettwin-history]];
+confirmed decisions and the zero-spend plan are in [[nettwin-project-context]].
 
 ## Where the build stands
 
@@ -28,12 +28,26 @@ every lesson is in [[nettwin-history]]; confirmed decisions and the zero-spend p
   tool calls (374 show commands, 18 snapshots, 12 topology reads), every one as JSON text, no
   apply, no report, never an nftables command. qwen3:14b `--think` has one record on 001 and was
   dropped. README, lab-notes (M10 section) and roadmap carry these numbers.
+- README rewritten for a general reader (PR #31): badges, plain-language pitch, "See it work"
+  with `docs/media/demo-019.svg`, four-step "How it works", the original mermaid diagram with
+  colour classes (checked in light and dark themes), tech stack table, simplified results table
+  (medians in minutes, local row as "0 of 21 faults"), takeaways, limits, quickstart.
+- The demo is a real headless team run on 019, recorded by `scripts/record_demo.py` (harness
+  run_one with a live-printing spawn, h20 ping before and after, harness score card, scratch
+  results dir, twin reset after) and rendered by `scripts/render_demo.py` (animated SVG, CSS
+  keyframes, 72 s loop, waits over 1 s shortened). Two recording runs were spent on 2026-09-27:
+  run 1 was clean but truncated the rule text; run 2 (kept) shows the verifier failing a
+  route-leak fix (`ip prefix-list CORP seq 20 permit 10.0.20.0/24`), a rollback, the NAT retry
+  (one refused for quotes), 20/20 pass, export, all five scores ✓, 6 min 43 s. One line of the
+  JSON (`reachability_matrix`) was re-rendered from the run's transcript with the formatter's
+  new summary.
 - The twin is golden (the harness resets after every run). At the end of this session the WSL
   keep-alive and both servers were still running; they die with WSL.
 
 ## Items that need the user
 
-- A screen recording of an interactive `/diagnose` run in the desktop app.
+- Optional: a screen capture of an interactive `/diagnose` run in the desktop app (the README
+  already has the terminal recording of a live headless run).
 - Any extra subscription-metered Claude runs beyond the approved matrix (more trials per cell, a
   Haiku 4.5 row via `--model haiku`).
 

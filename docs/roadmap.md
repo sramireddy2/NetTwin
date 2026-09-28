@@ -28,8 +28,9 @@ Design and rationale live in [design.md](design.md).
   qwen3:14b with thinking was tried on 001 and dropped: four turns in 1 h 48 min, then a
   model timeout.
 - M11: README results (#17), design naming (#18), `netbench timeline` and the demo page
-  [demo.md](demo.md) (#27). Still open: a screen recording of an interactive `/diagnose` run,
-  which needs an operator at the desktop app.
+  [demo.md](demo.md) (#27), and a rewritten README with a terminal recording of a live run
+  (`scripts/record_demo.py`, `scripts/render_demo.py`, #31). A screen capture of an
+  interactive `/diagnose` run in the desktop app would need an operator there; it is optional.
 
 ## Runtime split
 
