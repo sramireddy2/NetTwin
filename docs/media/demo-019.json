@@ -1,0 +1,1817 @@
+{
+ "version": 1,
+ "title": "nettwin · live run · 019-nft-nat-missing",
+ "scenario": "019-nft-nat-missing",
+ "model": "sonnet",
+ "recorded_at": "2026-09-28T02:39:09+00:00",
+ "cols": 100,
+ "palette": {
+  "bg": "#0d1117",
+  "text": "#c9d1d9",
+  "dim": "#8b949e",
+  "bright": "#f0f6fc",
+  "prompt": "#7ee787",
+  "ok": "#3fb950",
+  "bad": "#f85149",
+  "warn": "#d29922",
+  "node": "#a5d6ff",
+  "commander": "#58a6ff",
+  "l2-investigator": "#d2a8ff",
+  "l3-investigator": "#ffa657",
+  "policy-investigator": "#f778ba",
+  "change-agent": "#e3b341",
+  "verifier": "#39c5cf"
+ },
+ "score": {
+  "root_cause_node": true,
+  "root_cause_component": true,
+  "root_cause": true,
+  "fix_correct": true,
+  "verified": true,
+  "collateral": [],
+  "collateral_free": true,
+  "nodes_touched": [
+   "r4"
+  ],
+  "ops_applied": 1,
+  "ops_expected": 1,
+  "minimal": true,
+  "restored_golden": false,
+  "golden_snapshot_id": "e4a6c253d1140e45301437719cf063c0b78b827c7c12317fc7cb77a3eb385b96",
+  "after_snapshot_id": "ecf426122487621a22fb3a9015313eaa81675af4bf9cfb5c4b6ae2f434c42aae",
+  "exported": true
+ },
+ "events": [
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "prompt",
+     "$ "
+    ],
+    [
+     "bright",
+     "uv run python scripts/record_demo.py 019"
+    ]
+   ]
+  },
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "text",
+     ""
+    ]
+   ]
+  },
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "bright",
+     "  NetTwin "
+    ],
+    [
+     "dim",
+     "· twin: 5 FRR routers, a VLAN switch, 4 hosts (containerlab on WSL2)"
+    ]
+   ]
+  },
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "dim",
+     "  planting fault "
+    ],
+    [
+     "warn",
+     "019-nft-nat-missing"
+    ],
+    [
+     "dim",
+     " through the admin route"
+    ]
+   ]
+  },
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "dim",
+     "  ticket: "
+    ],
+    [
+     "text",
+     "NOC ticket: guest users on VLAN 20 cannot reach the internet although they reach their"
+    ]
+   ]
+  },
+  {
+   "t": 0.0,
+   "segments": [
+    [
+     "dim",
+     "          "
+    ],
+    [
+     "text",
+     "gateway and the corporate side of the network. Corporate users reach the internet"
+    ]
+   ]
+  },
+  {
+   "t": 0.001,
+   "segments": [
+    [
+     "dim",
+     "          "
+    ],
+    [
+     "text",
+     "normally and the ISP reports no change on their side."
+    ]
+   ]
+  },
+  {
+   "t": 9.63,
+   "segments": [
+    [
+     "dim",
+     "  golden snapshot "
+    ],
+    [
+     "text",
+     "e4a6c253d114"
+    ]
+   ]
+  },
+  {
+   "t": 26.748,
+   "segments": [
+    [
+     "dim",
+     "  before "
+    ],
+    [
+     "node",
+     "h20 ▸ "
+    ],
+    [
+     "text",
+     "ping -c 3 -W 1 198.51.100.10   "
+    ],
+    [
+     "bad",
+     "✗ 0/3 replies"
+    ]
+   ]
+  },
+  {
+   "t": 26.748,
+   "segments": [
+    [
+     "text",
+     ""
+    ]
+   ]
+  },
+  {
+   "t": 26.748,
+   "segments": [
+    [
+     "bright",
+     "  The agent team takes the ticket (claude -p /diagnose, Sonnet)"
+    ]
+   ]
+  },
+  {
+   "t": 39.027,
+   "segments": [
+    [
+     "dim",
+     "  +0:12  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "reads "
+    ],
+    [
+     "text",
+     "lab://topology"
+    ]
+   ]
+  },
+  {
+   "t": 40.529,
+   "segments": [
+    [
+     "dim",
+     "  +0:13  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "text",
+     "snapshot "
+    ],
+    [
+     "dim",
+     "ad3afc9b2ed3"
+    ]
+   ]
+  },
+  {
+   "t": 52.709,
+   "segments": [
+    [
+     "dim",
+     "  +0:25  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator"
+    ],
+    [
+     "dim",
+     " · L2 investigation of guest VLAN 20 outage"
+    ]
+   ]
+  },
+  {
+   "t": 55.162,
+   "segments": [
+    [
+     "dim",
+     "  +0:28  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "sw1   "
+    ],
+    [
+     "text",
+     "bridge -j vlan show"
+    ]
+   ]
+  },
+  {
+   "t": 55.664,
+   "segments": [
+    [
+     "dim",
+     "  +0:28  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "sw1   "
+    ],
+    [
+     "text",
+     "ip -br link"
+    ]
+   ]
+  },
+  {
+   "t": 56.164,
+   "segments": [
+    [
+     "dim",
+     "  +0:29  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "ip -br addr"
+    ]
+   ]
+  },
+  {
+   "t": 56.664,
+   "segments": [
+    [
+     "dim",
+     "  +0:29  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "ip -d link show eth3"
+    ]
+   ]
+  },
+  {
+   "t": 56.886,
+   "segments": [
+    [
+     "dim",
+     "  +0:30  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator"
+    ],
+    [
+     "dim",
+     " · L3 investigation of guest VLAN 20 outage"
+    ]
+   ]
+  },
+  {
+   "t": 57.121,
+   "segments": [
+    [
+     "dim",
+     "  +0:30  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "h20   "
+    ],
+    [
+     "text",
+     "ip -br addr"
+    ]
+   ]
+  },
+  {
+   "t": 57.477,
+   "segments": [
+    [
+     "dim",
+     "  +0:30  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "h10   "
+    ],
+    [
+     "text",
+     "ip -br addr"
+    ]
+   ]
+  },
+  {
+   "t": 59.901,
+   "segments": [
+    [
+     "dim",
+     "  +0:33  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "show running-config"
+    ]
+   ]
+  },
+  {
+   "t": 60.404,
+   "segments": [
+    [
+     "dim",
+     "  +0:33  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r1    "
+    ],
+    [
+     "text",
+     "show ip ospf neighbor"
+    ]
+   ]
+  },
+  {
+   "t": 60.772,
+   "segments": [
+    [
+     "dim",
+     "  +0:34  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show ip ospf neighbor"
+    ]
+   ]
+  },
+  {
+   "t": 61.334,
+   "segments": [
+    [
+     "dim",
+     "  +0:34  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator"
+    ],
+    [
+     "dim",
+     " · Policy investigation of guest VLAN 2..."
+    ]
+   ]
+  },
+  {
+   "t": 65.796,
+   "segments": [
+    [
+     "dim",
+     "  +0:39  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "h20   "
+    ],
+    [
+     "text",
+     "ip neigh"
+    ]
+   ]
+  },
+  {
+   "t": 66.097,
+   "segments": [
+    [
+     "dim",
+     "  +0:39  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 66.345,
+   "segments": [
+    [
+     "dim",
+     "  +0:39  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "ip neigh show dev eth3.20"
+    ]
+   ]
+  },
+  {
+   "t": 66.668,
+   "segments": [
+    [
+     "dim",
+     "  +0:39  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 66.936,
+   "segments": [
+    [
+     "dim",
+     "  +0:40  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "sw1   "
+    ],
+    [
+     "text",
+     "bridge fdb show br br0"
+    ]
+   ]
+  },
+  {
+   "t": 67.101,
+   "segments": [
+    [
+     "dim",
+     "  +0:40  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r1    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 67.356,
+   "segments": [
+    [
+     "dim",
+     "  +0:40  "
+    ],
+    [
+     "l2-investigator",
+     "l2-investigator      "
+    ],
+    [
+     "node",
+     "r3    "
+    ],
+    [
+     "text",
+     "ip -d link show eth3.20"
+    ]
+   ]
+  },
+  {
+   "t": 67.45,
+   "segments": [
+    [
+     "dim",
+     "  +0:40  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r2    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 68.223,
+   "segments": [
+    [
+     "dim",
+     "  +0:41  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r1    "
+    ],
+    [
+     "text",
+     "show running-config ospfd"
+    ]
+   ]
+  },
+  {
+   "t": 68.679,
+   "segments": [
+    [
+     "dim",
+     "  +0:41  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r2    "
+    ],
+    [
+     "text",
+     "show running-config ospfd"
+    ]
+   ]
+  },
+  {
+   "t": 69.226,
+   "segments": [
+    [
+     "dim",
+     "  +0:42  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r1    "
+    ],
+    [
+     "text",
+     "show ip route ospf"
+    ]
+   ]
+  },
+  {
+   "t": 69.587,
+   "segments": [
+    [
+     "dim",
+     "  +0:42  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show ip route ospf"
+    ]
+   ]
+  },
+  {
+   "t": 75.781,
+   "segments": [
+    [
+     "dim",
+     "  +0:49  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show running-config bgpd"
+    ]
+   ]
+  },
+  {
+   "t": 76.274,
+   "segments": [
+    [
+     "dim",
+     "  +0:49  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show bgp summary"
+    ]
+   ]
+  },
+  {
+   "t": 76.68,
+   "segments": [
+    [
+     "dim",
+     "  +0:49  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show bgp ipv4 unicast"
+    ]
+   ]
+  },
+  {
+   "t": 77.223,
+   "segments": [
+    [
+     "dim",
+     "  +0:50  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show running-config"
+    ]
+   ]
+  },
+  {
+   "t": 77.723,
+   "segments": [
+    [
+     "dim",
+     "  +0:50  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "ip -j -4 addr"
+    ]
+   ]
+  },
+  {
+   "t": 78.22,
+   "segments": [
+    [
+     "dim",
+     "  +0:51  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "inet  "
+    ],
+    [
+     "text",
+     "ip -j -4 addr"
+    ]
+   ]
+  },
+  {
+   "t": 78.578,
+   "segments": [
+    [
+     "dim",
+     "  +0:51  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "ip -j -4 addr"
+    ]
+   ]
+  },
+  {
+   "t": 81.671,
+   "segments": [
+    [
+     "dim",
+     "  +0:54  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show bgp summary"
+    ]
+   ]
+  },
+  {
+   "t": 82.07,
+   "segments": [
+    [
+     "dim",
+     "  +0:55  "
+    ],
+    [
+     "l3-investigator",
+     "l3-investigator      "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show ip route 10.0.20.0/24"
+    ]
+   ]
+  },
+  {
+   "t": 93.022,
+   "segments": [
+    [
+     "dim",
+     "  +1:06  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show bgp ipv4 unicast neighbors 203.0.113.2 advertised-routes"
+    ]
+   ]
+  },
+  {
+   "t": 93.526,
+   "segments": [
+    [
+     "dim",
+     "  +1:06  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show ip route"
+    ]
+   ]
+  },
+  {
+   "t": 93.926,
+   "segments": [
+    [
+     "dim",
+     "  +1:07  "
+    ],
+    [
+     "policy-investigator",
+     "policy-investigator  "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show bgp ipv4 unicast"
+    ]
+   ]
+  },
+  {
+   "t": 181.975,
+   "segments": [
+    [
+     "dim",
+     "  +2:35  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "change-agent",
+     "change-agent"
+    ],
+    [
+     "dim",
+     " · Apply fix for missing guest BGP redistribution"
+    ]
+   ]
+  },
+  {
+   "t": 183.873,
+   "segments": [
+    [
+     "dim",
+     "  +2:37  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show running-config"
+    ]
+   ]
+  },
+  {
+   "t": 189.8,
+   "segments": [
+    [
+     "dim",
+     "  +2:43  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "bright",
+     "apply_config r4  "
+    ],
+    [
+     "ok",
+     "→ applied"
+    ],
+    [
+     "dim",
+     ", change 8bbe867424f3"
+    ]
+   ]
+  },
+  {
+   "t": 189.8,
+   "segments": [
+    [
+     "dim",
+     "                              "
+    ],
+    [
+     "ok",
+     "+ ip prefix-list CORP seq 20 permit 10.0.20.0/24"
+    ]
+   ]
+  },
+  {
+   "t": 191.681,
+   "segments": [
+    [
+     "dim",
+     "  +2:44  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show bgp ipv4 unicast"
+    ]
+   ]
+  },
+  {
+   "t": 192.054,
+   "segments": [
+    [
+     "dim",
+     "  +2:45  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show ip route 10.0.20.0/24"
+    ]
+   ]
+  },
+  {
+   "t": 196.094,
+   "segments": [
+    [
+     "dim",
+     "  +2:49  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show ip route 10.0.20.0/24"
+    ]
+   ]
+  },
+  {
+   "t": 196.452,
+   "segments": [
+    [
+     "dim",
+     "  +2:49  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show ip prefix-list CORP"
+    ]
+   ]
+  },
+  {
+   "t": 200.576,
+   "segments": [
+    [
+     "dim",
+     "  +2:53  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "show bgp ipv4 unicast"
+    ]
+   ]
+  },
+  {
+   "t": 202.851,
+   "segments": [
+    [
+     "dim",
+     "  +2:56  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "isp   "
+    ],
+    [
+     "text",
+     "show ip route 10.0.20.0/24"
+    ]
+   ]
+  },
+  {
+   "t": 214.364,
+   "segments": [
+    [
+     "dim",
+     "  +3:07  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "verifier",
+     "verifier"
+    ],
+    [
+     "dim",
+     " · Verify guest VLAN fix in isolation"
+    ]
+   ]
+  },
+  {
+   "t": 221.262,
+   "segments": [
+    [
+     "dim",
+     "  +3:14  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "wait_converged  converged"
+    ]
+   ]
+  },
+  {
+   "t": 236.023,
+   "segments": [
+    [
+     "dim",
+     "  +3:29  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "intent_check  "
+    ],
+    [
+     "bad",
+     "failed inet-no-guest, no-guest-leak"
+    ]
+   ]
+  },
+  {
+   "t": 241.186,
+   "segments": [
+    [
+     "dim",
+     "  +3:34  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "route_diff before → after  2 route changes"
+    ]
+   ]
+  },
+  {
+   "t": 243.392,
+   "segments": [
+    [
+     "dim",
+     "  +3:36  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "reachability_matrix  7 probes, 6 answered"
+    ]
+   ]
+  },
+  {
+   "t": 270.206,
+   "segments": [
+    [
+     "dim",
+     "  +4:03  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "intent_check  "
+    ],
+    [
+     "bad",
+     "failed inet-no-guest, no-guest-leak"
+    ]
+   ]
+  },
+  {
+   "t": 304.525,
+   "segments": [
+    [
+     "dim",
+     "  +4:37  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "warn",
+     "rollback "
+    ],
+    [
+     "dim",
+     "ad3afc9b2ed3"
+    ]
+   ]
+  },
+  {
+   "t": 318.461,
+   "segments": [
+    [
+     "dim",
+     "  +4:51  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "change-agent",
+     "change-agent"
+    ],
+    [
+     "dim",
+     " · Retry fix using NAT instead of BGP leak"
+    ]
+   ]
+  },
+  {
+   "t": 320.247,
+   "segments": [
+    [
+     "dim",
+     "  +4:53  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 320.671,
+   "segments": [
+    [
+     "dim",
+     "  +4:53  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "ip -j -4 addr"
+    ]
+   ]
+  },
+  {
+   "t": 325.316,
+   "segments": [
+    [
+     "dim",
+     "  +4:58  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "text",
+     "snapshot "
+    ],
+    [
+     "dim",
+     "ad3afc9b2ed3"
+    ]
+   ]
+  },
+  {
+   "t": 329.253,
+   "segments": [
+    [
+     "dim",
+     "  +5:02  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "bright",
+     "apply_config r4  "
+    ],
+    [
+     "warn",
+     "→ refused: rule contains forbidden characters"
+    ]
+   ]
+  },
+  {
+   "t": 329.253,
+   "segments": [
+    [
+     "dim",
+     "                              "
+    ],
+    [
+     "dim",
+     "nft add rule ip nat postrouting ip saddr 10.0.20.0/24 oifname \"eth3\""
+    ]
+   ]
+  },
+  {
+   "t": 329.253,
+   "segments": [
+    [
+     "dim",
+     "                              "
+    ],
+    [
+     "dim",
+     "masquerade"
+    ]
+   ]
+  },
+  {
+   "t": 334.613,
+   "segments": [
+    [
+     "dim",
+     "  +5:07  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "bright",
+     "apply_config r4  "
+    ],
+    [
+     "ok",
+     "→ applied"
+    ],
+    [
+     "dim",
+     ", change 701d698cfc47"
+    ]
+   ]
+  },
+  {
+   "t": 334.613,
+   "segments": [
+    [
+     "dim",
+     "                              "
+    ],
+    [
+     "ok",
+     "+ ip saddr 10.0.20.0/24 oifname \"eth3\" masquerade"
+    ]
+   ]
+  },
+  {
+   "t": 336.839,
+   "segments": [
+    [
+     "dim",
+     "  +5:10  "
+    ],
+    [
+     "change-agent",
+     "change-agent         "
+    ],
+    [
+     "node",
+     "r4    "
+    ],
+    [
+     "text",
+     "nft -a list ruleset"
+    ]
+   ]
+  },
+  {
+   "t": 347.153,
+   "segments": [
+    [
+     "dim",
+     "  +5:20  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "dim",
+     "launches "
+    ],
+    [
+     "verifier",
+     "verifier"
+    ],
+    [
+     "dim",
+     " · Verify NAT-based fix in isolation"
+    ]
+   ]
+  },
+  {
+   "t": 358.136,
+   "segments": [
+    [
+     "dim",
+     "  +5:31  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "wait_converged  converged"
+    ]
+   ]
+  },
+  {
+   "t": 369.025,
+   "segments": [
+    [
+     "dim",
+     "  +5:42  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "intent_check  "
+    ],
+    [
+     "ok",
+     "passed 20/20 rules"
+    ]
+   ]
+  },
+  {
+   "t": 371.193,
+   "segments": [
+    [
+     "dim",
+     "  +5:44  "
+    ],
+    [
+     "verifier",
+     "verifier             "
+    ],
+    [
+     "text",
+     "route_diff before → after  no route changes"
+    ]
+   ]
+  },
+  {
+   "t": 409.156,
+   "segments": [
+    [
+     "dim",
+     "  +6:22  "
+    ],
+    [
+     "commander",
+     "commander            "
+    ],
+    [
+     "bright",
+     "export_change "
+    ],
+    [
+     "ok",
+     "→ approved"
+    ],
+    [
+     "dim",
+     " (bench-auto)"
+    ]
+   ]
+  },
+  {
+   "t": 423.926,
+   "segments": [
+    [
+     "text",
+     ""
+    ]
+   ]
+  },
+  {
+   "t": 426.448,
+   "segments": [
+    [
+     "dim",
+     "  after  "
+    ],
+    [
+     "node",
+     "h20 ▸ "
+    ],
+    [
+     "text",
+     "ping -c 3 -W 1 198.51.100.10   "
+    ],
+    [
+     "ok",
+     "✓ 3/3 replies"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "text",
+     ""
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "bright",
+     "  Scored by the harness from the twin's own state, not the agents' report"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  root cause  "
+    ],
+    [
+     "ok",
+     "✓"
+    ],
+    [
+     "text",
+     "  r4 nft.nat                  "
+    ],
+    [
+     "dim",
+     "planted: r4 nft.nat"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  fix         "
+    ],
+    [
+     "ok",
+     "✓"
+    ],
+    [
+     "text",
+     "  intent check after the run  "
+    ],
+    [
+     "dim",
+     "every rule passes again"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  verified    "
+    ],
+    [
+     "ok",
+     "✓"
+    ],
+    [
+     "text",
+     "  isolated verifier           "
+    ],
+    [
+     "dim",
+     "judged before the export"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  collateral  "
+    ],
+    [
+     "ok",
+     "✓"
+    ],
+    [
+     "text",
+     "  reachability matrix         "
+    ],
+    [
+     "dim",
+     "nothing else broke"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  minimal     "
+    ],
+    [
+     "ok",
+     "✓"
+    ],
+    [
+     "text",
+     "  1 op(s)                     "
+    ],
+    [
+     "dim",
+     "on r4"
+    ]
+   ]
+  },
+  {
+   "t": 445.501,
+   "segments": [
+    [
+     "dim",
+     "  export      "
+    ],
+    [
+     "ok",
+     "approved"
+    ],
+    [
+     "dim",
+     "   ·   wall clock 6 min 43 s   ·   twin reset to golden"
+    ]
+   ]
+  }
+ ]
+}
