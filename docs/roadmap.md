@@ -43,7 +43,7 @@ Claude runs use the Claude Code subscription (subagents and headless `-p`). The 
 uses Ollama. Servers and harness are exercised by a scripted fake agent so tests cost
 nothing. There is no paid API usage anywhere in the plan.
 
-## Steps only the owner can do
+## One-time setup
 
 1. Install GitHub CLI and `gh auth login`.
 2. Install the Containerlab WSL distro and disable Docker Desktop integration for it
