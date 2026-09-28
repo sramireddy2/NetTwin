@@ -160,7 +160,7 @@ def main(
 ) -> None:
     data = json.loads(recording.read_text(encoding="utf-8"))
     svg = render(data, rows, max_gap, hold)
-    out.write_text(svg, encoding="utf-8")
+    out.write_text(svg, encoding="utf-8", newline="\n")
     print(f"{out}: {len(data['events'])} lines, {len(svg) // 1024} KiB")
 
 

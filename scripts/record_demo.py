@@ -443,6 +443,7 @@ def main(
             )
             + "\n",
             encoding="utf-8",
+            newline="\n",
         )
         print(f"recording saved to {out} ({len(rec.events)} lines); run record in {scratch}")
         # Closing a wedged streamable-HTTP session can hang (see netbench.cli): exit hard.
